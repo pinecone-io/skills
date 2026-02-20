@@ -1,5 +1,7 @@
 # Pinecone Agent Skills
 
+Note: This repo is still WIP and will be finished soon!
+
 Pinecone is the leading vector database for building accurate and performant AI applications at scale in production. Use it to build semantic search, retrieval augmented generation, recommendation systems, and agentic applications.
 
 This is Pinecone's official Agent Skills library, compatible with agentic IDEs such as Cursor, GitHub Copilot, Windsurf, Gemini CLI, and more. Skills follow the [Agent Skills standard](https://agentskills.io).
