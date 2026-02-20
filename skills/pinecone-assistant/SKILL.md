@@ -1,5 +1,5 @@
 ---
-name: assistant
+name: pinecone-assistant
 description: Create, manage, and chat with Pinecone Assistants for document Q&A with citations. Handles all assistant operations - create, upload, sync, chat, context retrieval, and list. Recognizes natural language like "create an assistant from my docs", "ask my assistant about X", or "upload my docs to Pinecone".
 ---
 
@@ -74,5 +74,5 @@ Handle chained requests naturally. Example:
 ## Prerequisites
 
 - `PINECONE_API_KEY` must be set in the environment
-- `uv` must be installed (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- `uv` must be installed — [install uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Get a free API key at: https://app.pinecone.io/?sessionType=signup

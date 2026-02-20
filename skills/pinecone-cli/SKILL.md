@@ -1,5 +1,5 @@
 ---
-name: cli
+name: pinecone-cli
 description: Guide for using the Pinecone CLI (pc) to manage Pinecone resources from the terminal. The CLI supports ALL index types (standard, integrated, sparse) and all vector operations — unlike the MCP which only supports integrated indexes. Use for batch operations, vector management, backups, namespaces, CI/CD automation, and full control over Pinecone resources.
 argument-hint: install | auth | index [op] | vector [op] | backup | namespace
 ---
@@ -41,7 +41,7 @@ pc target -o "my-org" -p "my-project"
 pc auth configure --client-id "$PINECONE_CLIENT_ID" --client-secret "$PINECONE_CLIENT_SECRET"
 
 # API key (quick testing)
-pc config set-api-key pcsk_abc123
+pc config set-api-key $PINECONE_API_KEY
 ```
 
 Check status: `pc auth status` · `pc target --show`
