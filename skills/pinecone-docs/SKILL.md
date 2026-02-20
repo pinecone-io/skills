@@ -46,7 +46,8 @@ Use this as a last resort if you cannot find the relevant page below.
 | Topic | URL |
 |---|---|
 | Upsert vectors and text | https://docs.pinecone.io/guides/index-data/upsert-data |
-Multitenancy with Namespaces: https://docs.pinecone.io/guides/index-data/implement-multitenancy
+| Multitenancy with namespaces | https://docs.pinecone.io/guides/index-data/implement-multitenancy |
+
 ---
 
 ## Search
@@ -75,7 +76,8 @@ Multitenancy with Namespaces: https://docs.pinecone.io/guides/index-data/impleme
 |---|---|
 | Production checklist — preparing your index for production | https://docs.pinecone.io/guides/production/production-checklist |
 | Common errors and what they mean | https://docs.pinecone.io/guides/production/error-handling |
-Targeting indexes correctly: Don't use index names in prod!: https://docs.pinecone.io/guides/manage-data/target-an-index#target-by-index-host-recommended
+| Targeting indexes correctly — don't use index names in prod | https://docs.pinecone.io/guides/manage-data/target-an-index#target-by-index-host-recommended |
+
 ---
 
 ## Data Formats

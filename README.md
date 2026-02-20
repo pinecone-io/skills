@@ -38,7 +38,7 @@ Using Claude Code? Try our [official plugin](https://github.com/pinecone-io/pine
 - **API key** — create one in the console, then `export PINECONE_API_KEY="pcsk_..."`
 - **Pinecone MCP** *(optional)* — enables the `query` skill and agent-native index operations. [Setup guide](https://docs.pinecone.io/guides/operations/mcp-server#tools)
 - **Pinecone CLI** *(optional)* — enables the `cli` skill. `brew install pinecone-io/tap/pinecone`
-- **uv** *(optional)* — runs the bundled Python scripts. `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- **uv** *(optional)* — runs the bundled Python scripts. [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
 
 ---
 
