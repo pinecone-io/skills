@@ -5,7 +5,8 @@ description: Interactive Pinecone quickstart for new developers. Choose between 
 
 # Pinecone Quickstart
 
-Welcome! This skill walks you through your first Pinecone experience using the tools available to you.
+Welcome! This skill walks you through your first Pinecone experience using the tools available to you. In this quickstart,
+you will learn how to do a simple form of semantic search over some example data.
 
 ## Prerequisites
 
@@ -23,6 +24,15 @@ Use AskUserQuestion (or any available user-input tool) to ask the user which pat
 ---
 
 ## Path A: Database Quickstart
+
+For each step, explain to the user what will happen. An overview is here:
+
+1. Check if MCP is set
+2. Create an integrated index with MCP
+3. Upsert sample data using the bundled script (9 sentences across productivity, health, and nature themes)
+4. Run a semantic search query and explore further queries
+5. Optionally try reranking
+6. Offer the complete standalone script
 
 ### Step 1 – Verify MCP is Available
 
@@ -62,29 +72,39 @@ uv run scripts/upsert.py --index quickstart
 ```
 
 **Explain to the user what's happening:**
-- The script uploads 8 sample records about famous world landmarks
+- The script uploads 9 sample records across three themes: **productivity** (getting work done), **health** (feeling unwell), and **nature** (outdoors/wildlife)
+- The dataset is intentionally varied so semantic search can show its value — the queries below use completely different words than the records, but the right ones still surface
 - Each record has an `_id`, a `chunk_text` field (the text that gets embedded), and a `category` field
 - This is the same structure you'd use for your own data — just replace the records
 
 ### Step 4 – Query with the MCP
 
-Use the MCP `search-records` tool to run a semantic search:
+Use the MCP `search-records` tool to run the first semantic search:
 
 ```
-index: quickstart
+index: quickstart-skills
 namespace: example-namespace
 query:
   topK: 3
   inputs:
-    text: "Famous historical structures and monuments"
+    text: "getting things done efficiently"
 ```
 
 Display the results in a clean table: ID, score, and `chunk_text`.
 
 **Explain to the user what's happening:**
-- You sent plain text — no vector math required
-- Pinecone embedded your query using the same model as the index
-- Results are ranked by semantic similarity, not keyword match
+- Notice the query shares no keywords with the records — but it surfaces the productivity sentences
+- That's semantic search: it finds meaning, not just matching words
+- You sent plain text — Pinecone embedded the query using the same model as the index
+
+**Offer to explore further:** Ask the user (via AskUserQuestion) if they'd like to try another query to see the effect more clearly:
+- Option A: `"feeling under the weather"` — should surface the health records
+- Option B: `"wildlife spotting outside"` — should surface the nature records
+- Option C: No thanks, move on
+
+Run whichever query they choose and display the results the same way. If they want to try both, do both. After each result, point out which theme surfaced and why.
+
+If they decline or are done exploring, proceed to Step 5 or offer to skip ahead to the complete script.
 
 ### Step 5 – Try Reranking (Optional)
 
@@ -101,23 +121,21 @@ rerank:
 
 **Explain**: Reranking runs a second-pass model over the results to improve relevance ordering.
 
-### Step 6 – Copy the Complete Script
+### Step 6 – Wrap Up
 
-Tell the user:
+Congratulate the user on completing the quickstart. Ask (via AskUserQuestion) if they'd like a standalone Python script that does everything in one go — create index, upsert, query, and rerank.
 
-> "You just completed the Pinecone database quickstart! Here's a standalone Python script that does everything in one go — create, upsert, query, and rerank. It's been copied to your project."
-
-Copy the complete script into their working directory:
+If yes, copy it to their working directory:
 
 ```bash
 cp scripts/quickstart_complete.py ./pinecone_quickstart.py
 ```
 
-Then tell the user:
+Tell the user:
 - The script is at `./pinecone_quickstart.py`
 - Run it with: `uv run pinecone_quickstart.py`
 - It uses `uv` inline dependencies — no separate install needed
-- They can modify the `records` list with their own data to build something real
+- They can swap in their own `records` list to build something real
 
 ---
 
@@ -125,7 +143,17 @@ Then tell the user:
 
 Guide the user through the Pinecone Assistant workflow using the existing assistant skills:
 
-### Step 1 – Create an Assistant
+### Step 1 – Check for Documents
+
+Before anything else, ask the user if they have files to upload. Pinecone Assistant accepts `.pdf`, `.md`, `.txt`, and `.docx` files — a single file or a folder of files both work.
+
+**If they have files:** ask for the path and proceed to Step 2.
+
+**If they don't have files:** offer two options via AskUserQuestion:
+- **Generate sample docs** — create a few short markdown files in `./sample-docs/` so they can complete the quickstart right now. Ask what topics they'd like (or default to: a product FAQ, a short how-to guide, and a brief company overview). Write 3 files, each 150–250 words.
+- **Come back later** — let them know they can return once they have documents and pick up from Step 2.
+
+### Step 2 – Create an Assistant
 
 Invoke `pinecone:assistant-create` or run:
 ```bash
@@ -134,16 +162,16 @@ uv run ../assistant/scripts/create.py --name my-assistant
 
 Explain: The assistant is a fully managed RAG service — upload documents, ask questions, get cited answers.
 
-### Step 2 – Upload Documents
+### Step 3 – Upload Documents
 
 Invoke `pinecone:assistant-upload` or run:
 ```bash
 uv run ../assistant/scripts/upload.py --assistant my-assistant --source ./your-docs
 ```
 
-Explain: Point to any local folder with `.pdf`, `.md`, `.txt`, or `.docx` files. Pinecone handles chunking, embedding, and indexing automatically.
+Explain: Pinecone handles chunking, embedding, and indexing automatically — no configuration needed.
 
-### Step 3 – Chat with the Assistant
+### Step 4 – Chat with the Assistant
 
 Invoke `pinecone:assistant-chat` or run:
 ```bash

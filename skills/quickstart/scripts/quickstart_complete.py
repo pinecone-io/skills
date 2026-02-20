@@ -29,54 +29,29 @@ if not pc.has_index(index_name):
     )
 
 # 2. Upsert records
+# Three distinct themes — notice the queries below use different words than the records.
+# That's semantic search: finding meaning, not just matching keywords.
 records = [
-    {
-        "_id": "rec1",
-        "chunk_text": "The Eiffel Tower was built in 1889 as a temporary exhibit for the World's Fair in Paris and attracts millions of visitors each year.",
-        "category": "architecture"
-    },
-    {
-        "_id": "rec2",
-        "chunk_text": "The Great Wall of China stretches over 13,000 miles and was built over many centuries to protect against invasions from the north.",
-        "category": "architecture"
-    },
-    {
-        "_id": "rec3",
-        "chunk_text": "The Colosseum in Rome, completed in 80 AD, could hold between 50,000 and 80,000 spectators for gladiatorial contests and public spectacles.",
-        "category": "architecture"
-    },
-    {
-        "_id": "rec4",
-        "chunk_text": "The Taj Mahal in Agra, India was commissioned in 1632 by Mughal Emperor Shah Jahan as a mausoleum for his beloved wife Mumtaz Mahal.",
-        "category": "architecture"
-    },
-    {
-        "_id": "rec5",
-        "chunk_text": "Machu Picchu is a 15th-century Inca citadel located in the Andes Mountains of Peru, rediscovered by explorer Hiram Bingham in 1911.",
-        "category": "architecture"
-    },
-    {
-        "_id": "rec6",
-        "chunk_text": "The Statue of Liberty was a gift from France to the United States, dedicated in 1886, and stands as a symbol of freedom and democracy.",
-        "category": "architecture"
-    },
-    {
-        "_id": "rec7",
-        "chunk_text": "The Parthenon is a former temple on the Athenian Acropolis dedicated to the goddess Athena, constructed between 447 and 432 BC.",
-        "category": "architecture"
-    },
-    {
-        "_id": "rec8",
-        "chunk_text": "Stonehenge is a prehistoric monument in Wiltshire, England, with the largest stones weighing up to 25 tons, dating to around 2500 BC.",
-        "category": "architecture"
-    },
+    # Health / feeling unwell
+    {"_id": "rec1", "chunk_text": "I've been sneezing all day and my nose won't stop running.", "category": "health"},
+    {"_id": "rec2", "chunk_text": "She stayed home with a pounding headache and a low-grade fever.", "category": "health"},
+    {"_id": "rec3", "chunk_text": "He felt completely drained after waking up with a sore throat and chills.", "category": "health"},
+    # Productivity / work
+    {"_id": "rec4", "chunk_text": "She blocked off two hours in the morning to focus without interruptions.", "category": "productivity"},
+    {"_id": "rec5", "chunk_text": "He finished all his tasks ahead of schedule by prioritizing the hardest ones first.", "category": "productivity"},
+    {"_id": "rec6", "chunk_text": "Turning off notifications helped her get into a deep flow state.", "category": "productivity"},
+    # Outdoors / nature
+    {"_id": "rec7", "chunk_text": "A red fox darted across the trail and disappeared into the underbrush.", "category": "nature"},
+    {"_id": "rec8", "chunk_text": "The hikers paused to watch a bald eagle circle lazily over the valley.", "category": "nature"},
+    {"_id": "rec9", "chunk_text": "Fireflies lit up the meadow as the sun dipped below the treeline.", "category": "nature"},
 ]
 
 dense_index = pc.Index(index_name)
 dense_index.upsert_records("example-namespace", records)
 
 # 3. Search records
-query = "Famous historical structures and monuments"
+# The query uses different words than the records — semantic search finds meaning, not keywords.
+query = "feeling ill and run down"
 
 results = dense_index.search(
     namespace="example-namespace",
