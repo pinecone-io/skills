@@ -34,12 +34,11 @@ This skill provides a simple way to query **integrated indexes** (indexes with b
 Utilize Pinecone MCP's `search-records` tool to search for records within a specified Pinecone integrated index using a text query.
 
 ## Workflow
-When necessary, try to use the AskUserQuestion tool to make entering multiple choice responses easier.
 
 **IMPORTANT: Before proceeding, verify the Pinecone MCP tools are available.** If MCP tools are not accessible:
 - Inform the user that the Pinecone MCP server needs to be configured
 - Check if `PINECONE_API_KEY` environment variable is set
-- Direct them to the MCP setup documentation or the pinecone:help skill
+- Direct them to the MCP setup documentation or the `pinecone-help` skill
 
 1. Parse the user's input for:
    - `query` (required): The text to search for.
@@ -48,24 +47,22 @@ When necessary, try to use the AskUserQuestion tool to make entering multiple ch
    - `reranker` (optional): The reranking model to use for improved relevance.
 
 2. If the user omits required arguments:
-   - If only the index name is provided, use the `describe-index` tool to retrieve available namespaces and prompt the user to choose with AskUserQuestion.
-   - If only a query is provided, use `list-indexes` to get available indexes, prompt the user to pick one, then use `describe-index` for namespaces if needed.
+   - If only the index name is provided, use the `describe-index` tool to retrieve available namespaces and ask the user to choose.
+   - If only a query is provided, use `list-indexes` to get available indexes, ask the user to pick one, then use `describe-index` for namespaces if needed.
 
 3. Call the `search-records` tool with the gathered arguments to perform the search.
 
-4. Format and display the returned results in a clear, readable table for the Claude Code console, including field highlights (such as ID, score, and relevant metadata).
+4. Format and display the returned results in a clear, readable table including field highlights (such as ID, score, and relevant metadata).
 
 ---
 
 ## Troubleshooting
 
-***IMPORTANT** Pinecone API Key is required for using this plugin, command and MCP server!
+**`PINECONE_API_KEY` is required.** Get a free key at https://app.pinecone.io/?sessionType=signup
 
-A user must have a Pinecone API key to use this command and the MCP server. One can be obtained for free by making a Pinecone account at https://app.pinecone.io/?sessionType=signup
-Then, the user must export the API key to their environment, as a variable named PINECONE_API_KEY. 
-
-If you run into an error regarding access, it's likely an API isn't set. Advise a 
-user to set their API key accordingly, and restart their Claude Code instance.
+If you get an access error, the key is likely missing. Ask the user to set it and restart their IDE or agent session:
+- Terminal: `export PINECONE_API_KEY="your-key"`
+- IDE without shell inheritance: add `PINECONE_API_KEY=your-key` to a `.env` file
 
 **IMPORTANT** At the moment, the /query command can only be used with integrated indexes, which use hosted Pinecone embedding models to embed and search for data.
 If a user attempts to query an index that uses a third party API model such as OpenAI, or HuggingFace embedding models, remind them that this capability is not available yet
@@ -82,6 +79,6 @@ with the Pinecone MCP server.
 - `describe-index`: Get index configuration and namespaces.
 - `describe-index-stats`: Get stats including record counts and namespaces.
 - `rerank-documents`: Rerank returned documents using a specified reranking model.
-- Helper: Use AskUserQuestion to interactively clarify missing information.
+- Ask the user interactively to clarify missing information when needed.
 
 ---

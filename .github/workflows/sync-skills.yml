@@ -1,0 +1,91 @@
+name: Sync Skills to Plugin Repos
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**'
+  workflow_dispatch:
+    inputs:
+      sync_all:
+        description: 'Sync all skills (ignores diff, good for initial setup and testing)'
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - repo: 'pinecone-io/pinecone-claude-code-plugin'
+            skills_dir: 'skills'
+
+    name: Sync → ${{ matrix.target.repo }}
+
+    steps:
+      - name: Checkout skills repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Find changed skill files
+        id: changed
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.sync_all }}" == "true" ]]; then
+            echo "Syncing all skills (workflow_dispatch with sync_all=true)"
+            files=$(find skills -type f | sort | tr '\n' ' ')
+          else
+            echo "Syncing only added/modified files since last commit"
+            files=$(git diff --diff-filter=AM --name-only HEAD~1 HEAD -- skills/ | tr '\n' ' ')
+          fi
+
+          if [[ -z "$files" ]]; then
+            echo "No skill files to sync."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Files to sync: $files"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "files=$files" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout target repo
+        if: steps.changed.outputs.has_changes == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.target.repo }}
+          token: ${{ secrets.PLUGIN_SYNC_PAT }}
+          path: target-repo
+
+      - name: Copy skill files
+        if: steps.changed.outputs.has_changes == 'true'
+        run: |
+          for file in ${{ steps.changed.outputs.files }}; do
+            # Preserve directory structure under skills/
+            rel="${file#skills/}"
+            dest="target-repo/${{ matrix.target.skills_dir }}/$rel"
+            mkdir -p "$(dirname "$dest")"
+            cp "$file" "$dest"
+            echo "Copied: $file → $dest"
+          done
+
+      - name: Open PR
+        if: steps.changed.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PLUGIN_SYNC_PAT }}
+          path: target-repo
+          branch: sync/skills-${{ github.run_id }}
+          title: 'sync: skills update from pinecone-io/skills'
+          body: |
+            Automated skill sync from [pinecone-io/skills](https://github.com/pinecone-io/skills) — run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
+            **Changed files:**
+            ```
+            ${{ steps.changed.outputs.files }}
+            ```
+
+            The contextualization workflow will run automatically on this branch to adapt these skills for this IDE. Review both the raw sync and Claude's adaptations before merging.
+          labels: 'skill-sync'
+          draft: false
