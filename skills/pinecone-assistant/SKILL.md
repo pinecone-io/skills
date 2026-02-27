@@ -55,7 +55,7 @@ Track the last assistant used within the conversation:
 - When a user creates or first uses an assistant, remember its name
 - If user says "my assistant", "it", or "the assistant" → use the last one
 - Briefly confirm which assistant you're using: "Asking docs-bot..."
-- If ambiguous and multiple exist → use AskUserQuestion to clarify
+- If ambiguous and multiple exist → ask the user to clarify
 
 ---
 
@@ -73,6 +73,6 @@ Handle chained requests naturally. Example:
 
 ## Prerequisites
 
-- `PINECONE_API_KEY` must be set in the environment
+- `PINECONE_API_KEY` must be available — terminal: `export PINECONE_API_KEY="your-key"`, or add to a `.env` file and run scripts with `uv run --env-file .env scripts/...`
 - `uv` must be installed — [install uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Get a free API key at: https://app.pinecone.io/?sessionType=signup

@@ -22,7 +22,7 @@ Upload files or directory contents to a Pinecone Assistant.
    ⚠️ Found 50 Python files. Assistant works with documents only — I'll skip the code files.
    Found 25 Markdown and 8 PDF files to upload instead.
    ```
-4. Confirm with AskUserQuestion.
+4. Confirm with the user before proceeding.
 5. Execute:
    ```bash
    uv run scripts/upload.py \

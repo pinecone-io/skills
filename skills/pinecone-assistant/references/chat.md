@@ -10,7 +10,7 @@ Send a message to an assistant and receive a cited response.
 
 ## Workflow
 
-1. Parse arguments. If assistant missing, run `uv run scripts/list.py --json` and use AskUserQuestion to select.
+1. Parse arguments. If assistant missing, run `uv run scripts/list.py --json` and ask the user to select.
 2. If message missing, prompt user for their question.
 3. Execute:
    ```bash
@@ -30,4 +30,4 @@ Send a message to an assistant and receive a cited response.
 **Assistant not found** — run list command, check for typos.
 **No response or timeout** — verify assistant has files uploaded and status is "ready" (not "indexing").
 **Empty or poor responses** — assistant may lack relevant documents; suggest upload.
-**PINECONE_API_KEY not set** — export the variable and restart.
+**PINECONE_API_KEY not set** — export the variable or add to a `.env` file, then restart your IDE/agent session.

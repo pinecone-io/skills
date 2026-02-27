@@ -11,8 +11,8 @@ Create a new Pinecone Assistant with custom configuration.
 
 ## Workflow
 
-1. Parse arguments. If name is missing, prompt with AskUserQuestion.
-2. Ask about region preference (use AskUserQuestion — US or EU).
+1. Parse arguments. If name is missing, prompt the user.
+2. Ask the user about region preference — US or EU.
 3. Ask if user wants custom instructions. Offer examples:
    - "Use professional technical tone and cite sources"
    - "Respond in Spanish with formal language"
@@ -40,4 +40,4 @@ Avoid: `test`, `assistant1`, `my-assistant`
 
 **Assistant name already exists** — list assistants and suggest a different name or delete the existing one.
 **Timeout** — increase `--timeout 60`, check network connectivity.
-**PINECONE_API_KEY not set** — export the variable and restart.
+**PINECONE_API_KEY not set** — export the variable or add to a `.env` file, then restart your IDE/agent session.
