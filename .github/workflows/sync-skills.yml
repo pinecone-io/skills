@@ -1,4 +1,6 @@
 name: Sync Skills to Plugin Repos
+# Push to main: incremental sync (only changed skill files)
+# Manual dispatch: full override (all skill files to a chosen repo or all repos)
 
 on:
   push:
@@ -7,10 +9,16 @@ on:
       - 'skills/**'
   workflow_dispatch:
     inputs:
-      sync_all:
-        description: 'Sync all skills (ignores diff, good for initial setup and testing)'
-        type: boolean
-        default: false
+      target_repo:
+        description: 'Target plugin repo (full name, e.g. pinecone-io/pinecone-claude-code-plugin)'
+        type: choice
+        options:
+          - all
+          - pinecone-io/pinecone-claude-code-plugin
+          - pinecone-io/pinecone-cursor-plugin
+          - pinecone-io/gemini-cli-extension
+          - pinecone-io/kiro-powers
+        default: all
 
 jobs:
   sync:
@@ -21,8 +29,20 @@ jobs:
         target:
           - repo: 'pinecone-io/pinecone-claude-code-plugin'
             skills_dir: 'skills'
+          - repo: 'pinecone-io/pinecone-cursor-plugin'
+            skills_dir: 'skills'
+          - repo: 'pinecone-io/gemini-cli-extension'
+            skills_dir: 'skills'
+          - repo: 'pinecone-io/kiro-powers'
+            skills_dir: 'skills'
 
     name: Sync → ${{ matrix.target.repo }}
+
+    # On dispatch, skip targets that don't match the selected repo (unless 'all')
+    if: >-
+      github.event_name == 'push' ||
+      inputs.target_repo == 'all' ||
+      inputs.target_repo == matrix.target.repo
 
     steps:
       - name: Checkout skills repo
@@ -30,14 +50,14 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Find changed skill files
+      - name: Find skill files to sync
         id: changed
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.sync_all }}" == "true" ]]; then
-            echo "Syncing all skills (workflow_dispatch with sync_all=true)"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "Full sync (workflow_dispatch)"
             files=$(find skills -type f | sort | tr '\n' ' ')
           else
-            echo "Syncing only added/modified files since last commit"
+            echo "Incremental sync (push to main)"
             files=$(git diff --diff-filter=AM --name-only HEAD~1 HEAD -- skills/ | tr '\n' ' ')
           fi
 

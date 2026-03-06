@@ -10,17 +10,12 @@ you will learn how to do a simple form of semantic search over some example data
 
 ## Prerequisites
 
-Before starting either path:
+Before starting either path, verify the API key works by calling `list-indexes` via the Pinecone MCP. If it succeeds, proceed. If it fails, ask the user to set their key:
 
-1. **`PINECONE_API_KEY`** must be available. Check if it's set:
-   ```bash
-   echo $PINECONE_API_KEY
-   ```
-   If empty, ask the user to provide their key. They can either:
-   - Export it in their terminal: `export PINECONE_API_KEY="your-key"`
-   - Or create a `.env` file in the project root: `PINECONE_API_KEY=your-key`
+- Terminal: `export PINECONE_API_KEY="your-key"`
+- Or create a `.env` file in the project root: `PINECONE_API_KEY=your-key`
 
-2. For the **Database path**: the Pinecone MCP server must be configured and available
+Then retry `list-indexes` to confirm.
 
 ## Step 0: Choose Your Path
 
@@ -44,11 +39,11 @@ For each step, explain to the user what will happen. An overview is here:
 
 ### Step 1 – Verify MCP is Available
 
-Attempt to call `list-indexes` from the Pinecone MCP. If it fails or tools are unavailable:
+The prerequisite check already called `list-indexes`. If it succeeded, the MCP is working — proceed to Step 2.
+
+If it failed because MCP tools were unavailable (not an auth error):
 - Tell the user the MCP server needs to be configured
 - Point them to: https://docs.pinecone.io/reference/tools/mcp
-
-If it succeeds, proceed.
 
 ### Step 2 – Create an Integrated Index
 
