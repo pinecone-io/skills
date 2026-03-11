@@ -1,6 +1,7 @@
 name: Sync Skills to Plugin Repos
-# Push to main: incremental sync (only changed skill files)
-# Manual dispatch: full override (all skill files to a chosen repo or all repos)
+# Two sync modes:
+#   push → incremental: diffs HEAD~1..HEAD, syncs only changed skill files to ALL target repos
+#   dispatch → full: syncs every file under skills/ to a chosen repo (or all repos)
 
 on:
   push:
@@ -38,19 +39,29 @@ jobs:
 
     name: Sync → ${{ matrix.target.repo }}
 
-    # On dispatch, skip targets that don't match the selected repo (unless 'all')
-    if: >-
-      github.event_name == 'push' ||
-      inputs.target_repo == 'all' ||
-      inputs.target_repo == matrix.target.repo
-
     steps:
+      # On dispatch, skip matrix entries that don't match the selected repo.
+      # On push, all matrix entries run.
+      - name: Check if target matches
+        id: gate
+        run: |
+          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.target_repo }}" == "all" || "${{ inputs.target_repo }}" == "${{ matrix.target.repo }}" ]]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "Skipping ${{ matrix.target.repo }} (selected: ${{ inputs.target_repo }})"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout skills repo
+        if: steps.gate.outputs.skip == 'false'
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
+      # Dispatch: sync all skill files (full override).
+      # Push: sync only files added/modified in the triggering commit.
       - name: Find skill files to sync
+        if: steps.gate.outputs.skip == 'false'
         id: changed
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -71,7 +82,7 @@ jobs:
           fi
 
       - name: Checkout target repo
-        if: steps.changed.outputs.has_changes == 'true'
+        if: steps.gate.outputs.skip == 'false' && steps.changed.outputs.has_changes == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ matrix.target.repo }}
@@ -79,7 +90,7 @@ jobs:
           path: target-repo
 
       - name: Copy skill files
-        if: steps.changed.outputs.has_changes == 'true'
+        if: steps.gate.outputs.skip == 'false' && steps.changed.outputs.has_changes == 'true'
         run: |
           for file in ${{ steps.changed.outputs.files }}; do
             # Preserve directory structure under skills/
@@ -91,7 +102,7 @@ jobs:
           done
 
       - name: Open PR
-        if: steps.changed.outputs.has_changes == 'true'
+        if: steps.gate.outputs.skip == 'false' && steps.changed.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.PLUGIN_SYNC_PAT }}
