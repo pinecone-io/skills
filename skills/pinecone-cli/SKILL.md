@@ -1,12 +1,18 @@
 ---
 name: pinecone-cli
-description: Guide for using the Pinecone CLI (pc) to manage Pinecone resources from the terminal. The CLI supports ALL index types (standard, integrated, sparse) and all vector operations — unlike the MCP which only supports integrated indexes. Use for batch operations, vector management, backups, namespaces, CI/CD automation, and full control over Pinecone resources.
+description: Guide for using the Pinecone CLI (pc) to manage Pinecone resources from the terminal. The CLI supports ALL index types (standard, integrated, sparse) and all vector operations — unlike the MCP which only supports integrated indexes. Use for authentication, generating api keys, batch operations, vector management, backups, namespaces, CI/CD automation, and full control over Pinecone resources.
 argument-hint: install | auth | index [op] | vector [op] | backup | namespace
 ---
 
 # Pinecone CLI (`pc`)
 
-Manage Pinecone from the terminal. The CLI is especially valuable for vector operations across **all index types** — something the MCP currently can't do.
+Manage Pinecone from the terminal. The CLI is especially valuable for:
+
+- vector operations across **all index types** — something the MCP currently can't do.
+- authentication and API key management: logging in, generating keys, and switching contexts (orgs/projects).
+
+**Extremely important: always use the json flag and the latest version of the CLI**
+Most commands in the CLI support a `-j` or `--json` flag that outputs structured JSON instead of human-readable text. This is critical for reliably parsing output in scripts and agent loops. Always use the JSON output when invoking CLI commands from code, especially during authetnication flows.
 
 ## CLI vs MCP
 
@@ -20,23 +26,70 @@ Manage Pinecone from the terminal. The CLI is especially valuable for vector ope
 
 ---
 
-## Setup
+
+## Setup when invoked
+When a user invokes this skill, check if `pc` is installed and authenticated by running these two commands:
+
+```bash
+pc version --json
+pc auth status --json
+```
+
+- If `pc version` fails, the CLI is not installed — install it using the steps below.
+- If `pc auth status` returns an empty `access_token`, the user is not authenticated — follow the Authenticate section below.
+
+It is also important to check that we have the latest version of the CLI installed. If the version is outdated or the CLI is not installed, install/upgrade as follows:
 
 ### Install (macOS)
 ```bash
-brew tap pinecone-io/tap
-brew install pinecone-io/tap/pinecone
+brew uninstall pinecone-io/tap/pinecone
+brew install --cask pinecone-io/tap/pinecone
 ```
 
 Other platforms (Linux, Windows) — download from [GitHub Releases](https://github.com/pinecone-io/cli/releases).
 
 ### Authenticate
 
-```bash
-# Interactive (recommended for local dev)
-pc login
-pc target -o "my-org" -p "my-project"
+For agent and IDE sessions, always use `--json` mode. Unlike the interactive `pc login`, the JSON mode is non-blocking — it returns immediately with a login URL instead of waiting for the browser flow to complete. This means you can present the URL and prompt the user to confirm they've logged in at the same time, so the user clicks the link while the confirmation prompt is already waiting for them:
 
+**Step 1** — Start the login flow:
+```bash
+pc login --json
+```
+Returns:
+```json
+{
+    "status": "pending",
+    "url": "<example-oauth-url>",
+    "session_id": "...",
+    "description": "Navigate to the URL to complete the OAuth authorization flow, then call this command again to retrieve credentials."
+}
+```
+Present the `url` to the user so they can open it in a browser and complete the OAuth flow. Then, use whatever user-prompting or question tool is available in your environment to ask the user to confirm they have completed the login before proceeding.
+
+**Step 2** — Once the user confirms, retrieve credentials:
+```bash
+pc login --json
+```
+Returns:
+```json
+{
+    "status": "authenticated",
+    "email": "user@example.com",
+    "org_id": "...",
+    "org_name": "my-org",
+    "project_id": "...",
+    "project_name": "my-project"
+}
+```
+
+Inform the user which organization and project they are now authenticated to (from the `org_name` and `project_name` fields). If they need to switch, use:
+```bash
+pc target -o "my-org" -p "my-project"
+```
+
+**Other authentication methods:**
+```bash
 # Service account (recommended for CI/CD)
 pc auth configure --client-id "$PINECONE_CLIENT_ID" --client-secret "$PINECONE_CLIENT_SECRET"
 
@@ -46,20 +99,27 @@ pc config set-api-key $PINECONE_API_KEY
 
 Check status: `pc auth status` · `pc target --show`
 
-> **Note for agent sessions**: If you need to run `pc login` inside an agent loop, the browser auth link may not surface correctly. It's best to authenticate **before** starting an agent session. Run `pc login` in your terminal directly, then invoke the agent once you're authenticated.
-
-### Authenticating the CLI does not set `PINECONE_API_KEY`
+### Authenticating the CLI does not set `PINECONE_API_KEY`: Here's how to make an API key for scripts and agents
 
 `pc login` authenticates the CLI tool itself — it does **not** set `PINECONE_API_KEY` in your environment. Python scripts, Node.js SDKs, and other tools that use the Pinecone SDK need `PINECONE_API_KEY` set separately.
 
-Use the CLI to create a key and export it in one step:
-
+**If the user already has an API key**, they should export it in their terminal before starting the agent session:
 ```bash
-KEY=$(pc api-key create --name agent-sdk-key --json | jq -r '.value')
-export PINECONE_API_KEY="$KEY"
+export PINECONE_API_KEY="your-key"
 ```
 
-Without `jq`: run `pc api-key create --name agent-sdk-key --json` and copy the `"value"` field manually.
+**If the user needs a new key mid-session**, use the CLI to create one and write it to a `.env` file. This works across shell invocations in agent environments where each command runs in a separate process:
+
+```bash
+pc api-key create --name agent-sdk-key --json | jq -r '"PINECONE_API_KEY=" + .value' > .env
+```
+
+Then run scripts with the `--env-file` flag:
+```bash
+uv run --env-file .env scripts/...
+```
+
+> **Important:** Remind the user to add `.env` to their `.gitignore` to avoid committing API keys to their repository.
 
 ---
 

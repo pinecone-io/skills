@@ -1,7 +1,5 @@
 # Pinecone Agent Skills
 
-Note: This repo is still WIP and will be finished soon!
-
 Pinecone is the leading vector database for building accurate and performant AI applications at scale in production. Use it to build semantic search, retrieval augmented generation, recommendation systems, and agentic applications.
 
 This is Pinecone's official Agent Skills library, compatible with agentic IDEs such as Cursor, GitHub Copilot, Windsurf, Gemini CLI, and more. Skills follow the [Agent Skills standard](https://agentskills.io).
@@ -37,7 +35,7 @@ Using Claude Code? Try our [official plugin](https://github.com/pinecone-io/pine
 - **Pinecone account** — free at [app.pinecone.io](https://app.pinecone.io/?sessionType=signup)
 - **API key** — create one in the console, then `export PINECONE_API_KEY="pcsk_..."`
 - **Pinecone MCP** *(optional)* — enables the `query` skill and agent-native index operations. [Setup guide](https://docs.pinecone.io/guides/operations/mcp-server#tools)
-- **Pinecone CLI** *(optional)* — enables the `cli` skill. `brew install pinecone-io/tap/pinecone`
+- **Pinecone CLI** *(optional)* — enables the `cli` skill. `brew uninstall pinecone-io/tap/pinecone && brew install --cask pinecone-io/tap/pinecone`
 - **uv** *(optional)* — runs the bundled Python scripts. [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
 
 ---

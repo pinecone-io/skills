@@ -4,6 +4,12 @@
 
 ### Authentication Issues
 
+If you cannot successfully authenticate through the pc login flow with json activated, please inform the user to:
+- ensure to click the authetication link when prompted
+- attempt to login themselves outside of an agentic session, then activate the session
+- set an API key of PINECONE_API_KEY environment variable, before starting the agentic session.
+
+
 **"Not authenticated" or "Invalid credentials"**
 ```bash
 pc auth status
@@ -25,6 +31,26 @@ pc config get-api-key   # Verify key is set
 # API keys are scoped to org + project — get a new one if needed
 pc api-key create -n "new-key" --store
 ```
+
+### API Keys and Shell Environments
+
+**`PINECONE_API_KEY` not available after exporting it**
+
+In agent environments (Claude Code, Cursor, etc.), each shell command may run in a separate process. An `export PINECONE_API_KEY=...` in one command may not be available in the next. There are two ways to handle this:
+
+1. **Export before starting the session** — run `export PINECONE_API_KEY="your-key"` in your terminal before launching the agent. The variable will be inherited by all child processes.
+
+2. **Write to a `.env` file** — if you need to create a key mid-session, write it to `.env` and use `--env-file` when running scripts:
+   ```bash
+   pc api-key create --name my-key --json | jq -r '"PINECONE_API_KEY=" + .value' > .env
+   uv run --env-file .env scripts/...
+   ```
+
+> **Important:** Add `.env` to your `.gitignore` to avoid committing API keys to your repository.
+
+**CLI works but scripts don't**
+
+The CLI stores its own auth token on disk (via `pc login`), so `pc` commands work across shell invocations. But Python/Node scripts using the Pinecone SDK read from `PINECONE_API_KEY`, which is a separate credential. Authenticating the CLI does not set this variable — you need to create and provide an API key separately.
 
 ### Target Context Issues
 
