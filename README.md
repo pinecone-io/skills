@@ -14,6 +14,8 @@ This is Pinecone's official Agent Skills library, compatible with agentic IDEs s
 npx skills add pinecone-io/skills
 ```
 
+If you want a Chinese place to search and install skills, check out Skills宝: https://skilery.com
+
 Using Claude Code? Try our [official plugin](https://github.com/pinecone-io/pinecone-claude-code-plugin) instead.
 
 ---
