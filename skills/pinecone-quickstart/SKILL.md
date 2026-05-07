@@ -43,7 +43,7 @@ The prerequisite check already called `list-indexes`. If it succeeded, the MCP i
 
 If it failed because MCP tools were unavailable (not an auth error):
 - Tell the user the MCP server needs to be configured
-- Point them to: https://docs.pinecone.io/reference/tools/mcp
+- Point them to: https://docs.pinecone.io/guides/operations/mcp-server
 
 ### Step 2 – Create an Integrated Index
 
@@ -226,5 +226,5 @@ See the [uv installation guide](https://docs.astral.sh/uv/getting-started/instal
 
 - Quickstart docs: https://docs.pinecone.io/guides/get-started/quickstart
 - Integrated indexes: https://docs.pinecone.io/guides/index-data/create-an-index
-- Python SDK: https://docs.pinecone.io/guides/get-started/python-sdk
-- MCP server: https://docs.pinecone.io/reference/tools/mcp
+- Python SDK: https://docs.pinecone.io/reference/sdks/python/overview
+- MCP server: https://docs.pinecone.io/guides/operations/mcp-server
