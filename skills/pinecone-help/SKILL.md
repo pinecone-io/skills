@@ -40,6 +40,7 @@ Here's everything you need to get started and a summary of all available skills.
 | `pinecone-cli` | Use the Pinecone CLI (`pc`) for terminal-based index and vector management |
 | `pinecone-assistant` | Create, manage, and chat with Pinecone Assistants for document Q&A with citations |
 | `pinecone-mcp` | Reference for all Pinecone MCP server tools and their parameters |
+| `pinecone-full-text-search` | Build a full-text-search index — schema design, safe bulk ingestion, and query construction (`text` / `query_string` / dense / sparse scoring with text-match and metadata filters). **Preview API (`2026-01.alpha`); requires `pinecone` Python SDK ≥ 9.0.** |
 | `pinecone-docs` | Curated links to official Pinecone documentation, organized by topic |
 
 ---
@@ -53,6 +54,8 @@ Here's everything you need to get started and a summary of all available skills.
 - Any other index type → `pinecone-cli`
 
 **Working with documents and Q&A?** → `pinecone-assistant`
+
+**Building a full-text search index (BM25-style keyword/phrase matching, optionally combined with dense or sparse vectors)?** → `pinecone-full-text-search` (preview API, needs `pinecone` Python SDK ≥ 9.0)
 
 **Need to manage indexes, bulk upload vectors, or automate workflows?** → `pinecone-cli`
 
