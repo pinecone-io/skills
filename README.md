@@ -1,7 +1,5 @@
 # Pinecone Agent Skills
 
-Note: This repo is still WIP and will be finished soon!
-
 Pinecone is the leading vector database for building accurate and performant AI applications at scale in production. Use it to build semantic search, retrieval augmented generation, recommendation systems, and agentic applications.
 
 This is Pinecone's official Agent Skills library, compatible with agentic IDEs such as Cursor, GitHub Copilot, Windsurf, Gemini CLI, and more. Skills follow the [Agent Skills standard](https://agentskills.io).
@@ -22,13 +20,14 @@ Using Claude Code? Try our [official plugin](https://github.com/pinecone-io/pine
 
 | Skill | Description |
 |---|---|
-| [`quickstart`](skills/quickstart/SKILL.md) | Step-by-step onboarding — create an index, upload data, and run your first search |
-| [`query`](skills/query/SKILL.md) | Search integrated indexes using natural language text via the Pinecone MCP |
-| [`cli`](skills/cli/SKILL.md) | Use the Pinecone CLI (`pc`) for terminal-based index and vector management across all index types |
-| [`assistant`](skills/assistant/SKILL.md) | Create, manage, and chat with Pinecone Assistants for document Q&A with citations |
-| [`mcp`](skills/mcp/SKILL.md) | Reference for all Pinecone MCP server tools and their parameters |
+| [`pinecone-quickstart`](skills/pinecone-quickstart/SKILL.md) | Step-by-step onboarding — create an index, upload data, and run your first search |
+| [`pinecone-query`](skills/pinecone-query/SKILL.md) | Search integrated indexes using natural language text via the Pinecone MCP |
+| [`pinecone-cli`](skills/pinecone-cli/SKILL.md) | Use the Pinecone CLI (`pc`) for terminal-based index and vector management across all index types |
+| [`pinecone-assistant`](skills/pinecone-assistant/SKILL.md) | Create, manage, and chat with Pinecone Assistants for document Q&A with citations |
+| [`pinecone-mcp`](skills/pinecone-mcp/SKILL.md) | Reference for all Pinecone MCP server tools and their parameters |
+| [`pinecone-full-text-search`](skills/pinecone-full-text-search/SKILL.md) | Build a full-text-search index — schema design, safe bulk ingestion, and query construction (`text` / `query_string` / dense / sparse scoring with text-match and metadata filters) |
 | [`pinecone-docs`](skills/pinecone-docs/SKILL.md) | Curated links to official Pinecone documentation, organized by topic |
-| [`help`](skills/help/SKILL.md) | Overview of all skills and what you need to get started |
+| [`pinecone-help`](skills/pinecone-help/SKILL.md) | Overview of all skills and what you need to get started |
 
 ---
 

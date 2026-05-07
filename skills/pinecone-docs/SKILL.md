@@ -57,6 +57,7 @@ Use this as a last resort if you cannot find the relevant page below.
 | Semantic search | https://docs.pinecone.io/guides/search/semantic-search |
 | Hybrid search | https://docs.pinecone.io/guides/search/hybrid-search |
 | Lexical search | https://docs.pinecone.io/guides/search/lexical-search |
+| Full-text search (preview) — document-schema FTS indexes with `text` / `query_string` / dense / sparse scoring | https://docs.pinecone.io/guides/search/full-text-search |
 | Metadata filtering — narrow results and speed up searches | https://docs.pinecone.io/guides/search/filter-by-metadata |
 
 ---
