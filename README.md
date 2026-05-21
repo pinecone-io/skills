@@ -27,6 +27,7 @@ Using Claude Code? Try our [official plugin](https://github.com/pinecone-io/pine
 | [`pinecone-mcp`](skills/pinecone-mcp/SKILL.md) | Reference for all Pinecone MCP server tools and their parameters |
 | [`pinecone-full-text-search`](skills/pinecone-full-text-search/SKILL.md) | Build a full-text-search index — schema design, safe bulk ingestion, and query construction (`text` / `query_string` / dense / sparse scoring with text-match and metadata filters) |
 | [`pinecone-docs`](skills/pinecone-docs/SKILL.md) | Curated links to official Pinecone documentation, organized by topic |
+| [`pinecone-n8n`](skills/pinecone-n8n/SKILL.md) | Build n8n workflows with the Pinecone Assistant node or Pinecone Vector Store node, including best practices and full workflow JSON generation |
 | [`pinecone-help`](skills/pinecone-help/SKILL.md) | Overview of all skills and what you need to get started |
 
 ---
@@ -34,7 +35,7 @@ Using Claude Code? Try our [official plugin](https://github.com/pinecone-io/pine
 ## Prerequisites
 
 - **Pinecone account** — free at [app.pinecone.io](https://app.pinecone.io/?sessionType=signup)
-- **API key** — create one in the console, then `export PINECONE_API_KEY="pcsk_..."`
+- **API key** — create one in the console, then `export PINECONE_API_KEY="your-key"`
 - **Pinecone MCP** *(optional)* — enables the `query` skill and agent-native index operations. [Setup guide](https://docs.pinecone.io/guides/operations/mcp-server#tools)
 - **Pinecone CLI** *(optional)* — enables the `cli` skill. `brew install pinecone-io/tap/pinecone`
 - **uv** *(optional)* — runs the bundled Python scripts. [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
