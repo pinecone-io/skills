@@ -69,7 +69,7 @@ resp = idx.documents.search(
 | `dense_vector` | `field` (dense_vector), `values` (list of floats) | Semantic / mood / topic ranking |
 | `sparse_vector` | `field` (sparse_vector), `sparse_values` ({indices, values}) | Custom sparse-encoder ranking |
 
-`text` / `dense_vector` / `sparse_vector` use singular `field`. `query_string` takes **no** `field` or `fields` key — passing either returns a `400`; scope fields inside the query with `fieldname:value` qualifiers. `sparse_vector` uses `sparse_values` (NOT `values`) — distinct from dense.
+`text` / `dense_vector` / `sparse_vector` use singular `field`. `query_string` takes **no** `field` or `fields` key — passing either returns a `400`; scope fields inside the query with `fieldname:value` qualifiers (unqualified terms search every text-searchable field). `sparse_vector` uses `sparse_values` (NOT `values`) — distinct from dense.
 
 **Filter operators by field type:**
 
