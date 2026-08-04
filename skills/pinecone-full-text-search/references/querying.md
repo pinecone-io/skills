@@ -127,6 +127,21 @@ score_by=[{
 
 Both reward documents that match in multiple fields. **`2026-01.alpha` weights every contributing field equally** — there is no per-clause weight parameter. To approximate weighting, use Option B with `^N` term boosts inside the query string (`title:({q})^3 OR body:({q})`).
 
+## Match-all browse (`query: "*"`)
+
+To return documents without any query — an initial view before the user has typed anything, or "just show me everything up to N" — use a `query_string` clause with `query: "*"`:
+
+```python
+resp = idx.documents.search(
+    namespace=NAMESPACE,
+    top_k=25,
+    score_by=[{"type": "query_string", "query": "*"}],
+    include_fields=["*"],
+)
+```
+
+This returns `top_k` documents in **arbitrary order** — it is not relevance-ranked keyword search. A bare `*` as the entire query is the one exception to the wildcard rules above (single-term prefixes like `auto*` remain unsupported). It is the documented pattern for an unfiltered listing; don't emulate it by storing a sentinel field on every document and querying against that.
+
 ## Filtering
 
 Filters run **before** scoring — they shrink the candidate set, then the chosen `score_by` ranks survivors. Two families of operators.

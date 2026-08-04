@@ -218,6 +218,7 @@ Map user prompt cues to API shapes. Read top-down — identify the cue, copy the
 | User prompt cue | API shape |
 |---|---|
 | Open-ended keywords ("articles about machine learning", search-bar query) | `score_by=[{"type": "text", "field": "<field>", "query": "<terms>"}]` — BM25 token-OR |
+| Everything, no query ("show all results", initial view before the user types) | `score_by=[{"type": "query_string", "query": "*"}]` — returns `top_k` docs in arbitrary order, not ranked. Don't emulate with a sentinel field |
 | Exact phrase, drives ranking ("rank by 'beautifully written'") | `score_by=[{"type": "query_string", "query": '<field>:("phrase here")'}]` |
 | Exact phrase, hard requirement ("must contain 'machine learning'") | `filter={"<field>": {"$match_phrase": "machine learning"}}` |
 | Required tokens, any order ("must mention TensorFlow", "must be about Illinois") | `filter={"<field>": {"$match_all": "tokens space-separated"}}` — preferred over `query_string` `+token` because it's a true hard filter, doesn't contribute to score |
