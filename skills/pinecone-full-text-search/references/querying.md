@@ -140,7 +140,7 @@ resp = idx.documents.search(
 )
 ```
 
-This returns `top_k` documents in **arbitrary order** — it is not relevance-ranked keyword search. A bare `*` as the entire query is the one exception to the wildcard rules above (single-term prefixes like `auto*` remain unsupported). It is the documented pattern for an unfiltered listing; don't emulate it by storing a sentinel field on every document and querying against that.
+This returns `top_k` documents in **arbitrary order** — it is not relevance-ranked keyword search. A bare `*` as the entire query is an exception to the wildcard rules above (single-term prefixes like `auto*` remain unsupported). It is the documented pattern for an unfiltered listing; don't emulate it by storing a sentinel field on every document and querying against that.
 
 ## Filtering
 
