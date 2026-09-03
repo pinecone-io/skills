@@ -26,6 +26,7 @@ Using Claude Code? Try our [official plugin](https://github.com/pinecone-io/pine
 | [`pinecone-assistant`](skills/pinecone-assistant/SKILL.md) | Create, manage, and chat with Pinecone Assistants for document Q&A with citations |
 | [`pinecone-mcp`](skills/pinecone-mcp/SKILL.md) | Reference for all Pinecone MCP server tools and their parameters |
 | [`pinecone-full-text-search`](skills/pinecone-full-text-search/SKILL.md) | Build a full-text-search index — schema design, safe bulk ingestion, and query construction (`text` / `query_string` / dense / sparse scoring with text-match and metadata filters) |
+| [`pinecone-import`](skills/pinecone-import/SKILL.md) | Bulk-import a large dataset into a serverless index from object storage (S3 / GCS / Azure) — prepare conformant Parquet, set up a storage integration, start the async import, and poll to completion |
 | [`pinecone-docs`](skills/pinecone-docs/SKILL.md) | Curated links to official Pinecone documentation, organized by topic |
 | [`pinecone-n8n`](skills/pinecone-n8n/SKILL.md) | Build n8n workflows with the Pinecone Assistant node or Pinecone Vector Store node, including best practices and full workflow JSON generation |
 | [`pinecone-help`](skills/pinecone-help/SKILL.md) | Overview of all skills and what you need to get started |
