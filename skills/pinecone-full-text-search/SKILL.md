@@ -59,7 +59,7 @@ resp = idx.documents.search(
 
 **Key rules** (the server enforces these; following them locally keeps the agent loop tight):
 
-- `score_by` is a list of clauses, but **exactly one scoring type per request** (server rejects mixed types). Multi-field BM25 is the one exception: multiple `text` clauses, or one `query_string` with `fields: [...]`. To combine BM25 + dense signals, restrict the dense search with a text-match filter (`$match_all` / `$match_phrase` / `$match_any`); do NOT mix scoring types in `score_by`.
+- `score_by` is a list of clauses, but **exactly one scoring type per request** (server rejects mixed types). Multi-field BM25 is the one exception: multiple `text` clauses, or one `query_string` whose expression spans fields (`title:(q) OR body:(q)`). To combine BM25 + dense signals, restrict the dense search with a text-match filter (`$match_all` / `$match_phrase` / `$match_any`); do NOT mix scoring types in `score_by`.
 - `filter` keys are field names (must exist in schema and be filterable) OR logical operators (`$and`, `$or`, `$not`). Field values are operator dicts (`{"$gt": 5}`, NOT bare values).
 - `include_fields` is required on every call. Pass `["*"]` for all stored fields, `[]` for ids+score only, or a list of names. Some SDK builds 400/422 if it's omitted.
 
@@ -68,11 +68,11 @@ resp = idx.documents.search(
 | `type` | Required keys | When to pick this |
 |---|---|---|
 | `text` | `field` (string FTS), `query` | Open-ended keyword search; BM25 ranking on one field |
-| `query_string` | `query` (Lucene), `fields` optional | Lucene boost (`^N`), proximity (`~N`), cross-field boolean, phrase prefix |
+| `query_string` | `query` (Lucene) | Lucene boost (`^N`), proximity (`~N`), cross-field boolean, phrase prefix |
 | `dense_vector` | `field` (dense_vector), `values` (list of floats) | Semantic / mood / topic ranking |
 | `sparse_vector` | `field` (sparse_vector), `sparse_values` ({indices, values}) | Custom sparse-encoder ranking |
 
-`text` / `dense_vector` / `sparse_vector` use singular `field`. Only `query_string` accepts a `fields` array (and also accepts singular `field` as an alias). `sparse_vector` uses `sparse_values` (NOT `values`) — distinct from dense.
+`text` / `dense_vector` / `sparse_vector` use singular `field`. `query_string` takes **no** `field` or `fields` key — passing either returns a `400`; scope fields inside the query with `fieldname:value` qualifiers (unqualified terms search every text-searchable field). `sparse_vector` uses `sparse_values` (NOT `values`) — distinct from dense.
 
 **Filter operators by field type:**
 
@@ -339,9 +339,9 @@ for m in resp.matches:
 - **Document operations: search supports `filter`, fetch and delete do not.** Fetch is **ID-only** (`POST /documents/fetch` with `ids: [...]`); delete accepts only `ids` or `delete_all: true`. To act on a metadata expression, search first to collect IDs, then fetch or delete those IDs.
 - **Namespaces auto-create on first upsert.** Pass any namespace string to `documents.upsert` / `batch_upsert` and the namespace is created on the fly; documents from different namespaces are fully isolated. Use `"__default__"` if you don't need partitioning. **Caveat:** the namespace management endpoints (`POST /namespaces`, `GET /namespaces`, `DELETE /namespaces/{namespace}`) and `describe_index_stats` are NOT yet supported on indexes with document schemas — you can write to a namespace, you just can't list / delete them via the API yet.
 - **Document and request size limits** (preview): per-document max **2 MB**; per-request max **2 MB and 1000 documents**; per FTS-enabled `string` field max **100 KB and 10,000 tokens** (tokens > 256 bytes are truncated by the analyzer); per-document filterable metadata (everything *not* in an FTS field) max **40 KB**. A schema can declare up to **100 FTS string fields**. For long-prose corpora, chunk before ingest — see `references/ingestion.md`.
-- **`score_by` clause shape — singular `field` is canonical for `text`/`dense_vector`/`sparse_vector`; only `query_string` takes a `fields` array.**
+- **`score_by` clause shape — singular `field` is required for `text`/`dense_vector`/`sparse_vector`; `query_string` takes no field key at all.**
     - `text`: `{"type":"text", "field":"<fts_field>", "query":"<terms>"}`.
-    - `query_string`: `{"type":"query_string", "query":"<lucene>", "fields":["<a>","<b>"]}` (the optional `fields` array; `query_string` also accepts a bare `"fields":"body"` string and the legacy `"field":"body"` as an alias).
+    - `query_string`: `{"type":"query_string", "query":"<lucene>"}` — no `field`/`fields` key (passing either returns a `400`). Target specific fields with Lucene qualifiers inside the query string: `fieldname:value` or `fieldname:(multi word value)`.
     - `dense_vector`: `{"type":"dense_vector", "field":"<dense_field>", "values":[/*floats*/]}`.
     - `sparse_vector`: `{"type":"sparse_vector", "field":"<sparse_field>", "sparse_values":{"indices":[...],"values":[...]}}` — note `sparse_values` (NOT `values`) for sparse clauses.
 - **Single-term prefix wildcards aren't supported.** `auto*` doesn't work in `query_string`; use phrase prefix (`"machine lea"*` — phrase must contain at least two terms, last term is matched as prefix).
