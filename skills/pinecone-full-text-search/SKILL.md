@@ -391,7 +391,9 @@ for m in resp.matches:
     - `dense_vector`: `{"type":"dense_vector", "field":"<dense_field>", "values":[/*floats*/]}`.
     - `sparse_vector`: `{"type":"sparse_vector", "field":"<sparse_field>", "sparse_values":{"indices":[...],"values":[...]}}` — note `sparse_values` (NOT `values`) for sparse clauses.
 - **Single-term prefix wildcards aren't supported.** `auto*` doesn't work in `query_string`; use phrase prefix (`"machine lea"*` — phrase must contain at least two terms, last term is matched as prefix).
-- **Indexes can't be created in CMEK-enabled projects alongside any `full_text_search` field, no backup/restore, no fuzzy or regex search, no S3 bulk import** for document-shaped indexes in `2026-07`. If any of these are hard requirements, the document-schema FTS surface isn't yet ready.
+- **Indexes can't be created in CMEK-enabled projects alongside any `full_text_search` field, no backup/restore** for document-shaped indexes in `2026-07`. If either of these is a hard requirement, the document-schema FTS surface isn't yet ready.
+- **Fuzzy (`term~N`) and regex (`field:/pattern/`) search are supported**, but only under `type: "query_string"` — see [Query syntax](https://docs.pinecone.io/guides/search/full-text-search/query-syntax) and `references/querying.md`. Neither works under `type: "text"`.
+- **Bulk import from object storage is supported by Pinecone for document-shaped indexes** (see [Import data](https://docs.pinecone.io/guides/index-data/import-data)) — this skill just doesn't implement it. Use `documents.upsert` / `documents.batch_upsert` (via `scripts/ingest.py`, see above) for ingestion here, or a dedicated import skill when one exists.
 
 ## Extension points
 

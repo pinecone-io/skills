@@ -58,7 +58,11 @@ Supported operators (full table in the public docs, summarized here):
 | Phrase slop    | `"…"~N`             | `body:("fast search"~2)`          |
 | Boost          | `term^N`            | `body:(machine^3 learning)`       |
 | Phrase prefix  | `"… word"*`         | `body:("james w"*)`               |
+| Fuzzy term     | `term~N` or `term~` | `body:(compxter~1)`               |
+| Regex          | `field:/pattern/`   | `body:/comput.*/`                 |
 | Cross-field    | `f1:(…) OR f2:(…)`  | `title:(quantum) OR body:(quantum machine)` |
+
+Fuzzy (`~N`, edit distance 0-2; bare `~` picks a distance from term length) and regex (`/…/`, matched against analyzed tokens, not raw field text) are `query_string`-only — the `~` and `/…/` syntax is treated as literal text under `type: "text"`. Fuzzy matching is best-effort on stemmed fields, since a typo can shift which stem a term normalizes to; it's most reliable on fields without stemming.
 
 **Cross-field clauses** are unique to `query_string` — they let one expression target multiple text-searchable fields with their own sub-clauses. Optionally pass a top-level `fields` array on the clause to restrict scope; omitted, the query runs against every text-searchable field in the schema.
 

@@ -298,7 +298,7 @@ This adapter also gives you a single chokepoint for retries, rate-limit backoff,
 
 ## Limits to be aware of
 
-- **No bulk import (S3 import job)** for document-shaped indexes in `2026-07`. Load through `documents.upsert` / `documents.batch_upsert`.
+- **Bulk import (from object storage) is out of scope for this skill, not unsupported by Pinecone.** Pinecone supports bulk import for document-shaped indexes in `2026-07` (JSON Lines format — see [Import data](https://docs.pinecone.io/guides/index-data/import-data)); this skill just doesn't implement it. Load through `documents.upsert` / `documents.batch_upsert` here, or use a dedicated import skill when one exists.
 - **No backup/restore.** If you need recoverability, snapshot your source data, not the index.
 - **No CMEK projects alongside any `full_text_search` field** — such indexes can't be created in CMEK-enabled projects.
 - **Indexing latency**: documents become searchable in ≲1 minute typically; multi-field schemas can take slightly longer.
