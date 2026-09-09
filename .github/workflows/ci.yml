@@ -1,0 +1,57 @@
+name: CI
+
+# Runs on every pull request. Three checks, all fast, none needing a secret or
+# the network:
+#
+#   build.py --all --check  — renders both targets and runs the build's own
+#                             assertions. This is the only check that catches an
+#                             undefined <<marker>>, a snippet defined but unused,
+#                             and frontmatter `name:` disagreeing with the skill
+#                             directory. A content contributor's most likely
+#                             mistakes are all in here.
+#   test_build.py           — the 54 unit tests on the build tooling itself.
+#   ruff                    — E9/F63/F7/F82 only: syntax errors and undefined
+#                             names in the bundled scripts. Not a style gate.
+#
+# Deliberately NOT here: reconcile.py (needs a token with read access to both
+# plugin repos) and cultivar (needs two API keys, costs real money, takes ~45
+# minutes). Both are run by hand before a sync.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Build, tests, lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      # Fails on an undefined marker, an unused snippet, a name/directory
+      # mismatch, a rendered .py that will not parse, or a non-idempotent build.
+      - name: Render both targets and run build assertions
+        run: uv run tools/build.py --all --check
+
+      - name: Build-tool unit tests
+        run: uv run tools/test_build.py
+
+      # E9  syntax / IO errors      F63 comparison bugs
+      # F7  syntax constructs       F82 undefined names
+      - name: Lint bundled scripts
+        run: uv run --with ruff ruff check --select E9,F63,F7,F82 skills/ tools/
