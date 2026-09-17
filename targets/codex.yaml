@@ -1,0 +1,102 @@
+# Build manifest — Codex plugin
+#
+# Consumed by tools/build.py, which renders skills/ -> dist/codex/.
+# Every value here was derived from the validators the target repo already runs
+# (scripts/check_*.py, on every PR via .github/workflows/validate.yml), not from
+# a design document. See targets/README.md for the field reference.
+
+repo: pinecone-io/pinecone-codex-plugin
+skills_path: skills
+
+# Directory rename: base `skills/pinecone-assistant/` -> `skills/assistant/`.
+# check_skills.py requires `name` to equal the parent directory name, and the
+# plugin namespaces skills as `pinecone:<skill>`, so the prefix is redundant.
+dir_name: "{slug}"
+
+# Frontmatter `name:`. Bare slug — check_skills.py fails any name that starts
+# with `pinecone-`, and requires name == directory name. This is the only target
+# whose skill_name is not prefixed.
+skill_name: "{slug}"
+
+# How this target writes a reference to another skill in prose. The plugin's own
+# README, plugin.json, and skill bodies all use `pinecone:<skill>`. See README.md
+# for what counts as a reference — a blanket substitution corrupts URLs, package
+# names, and index names.
+cross_reference: "pinecone:{slug}"
+
+# Replaces `pinecone_skills:` in the source_tag argument inside .py files.
+# check_source_tags.py pins the namespace to exactly this.
+source_tag: codex_plugin
+
+# Replaces `pinecone-skills` in the `agentic-ide-source` metadata value that
+# pinecone-assistant/scripts/create.py stamps on each assistant it creates.
+# Same shape as source_tag, different consumer. The hand-copied content in the
+# target repo currently stamps `claude-code-plugin` here.
+ide_source: codex-plugin
+
+include:
+  - assistant
+  - cli
+  - docs
+  - full-text-search
+  - help
+  - mcp
+  - n8n
+  - query
+  - quickstart
+
+# check_skills.py rejects `allowed-tools` outright: it is a Claude Code field.
+# Verified: 0 of 8 live skills carry it.
+frontmatter: {}
+
+# Per-target wording for the `<<name>>` markers in base. See targets/README.md.
+#
+# Two things drive these. Codex reads the API key from its own process
+# environment, which differs between the CLI and the desktop app, and that is
+# worth saying plainly. And Codex declares no slash commands — it picks a skill
+# from what you ask for — so the scripts name the commands you can actually run.
+snippets:
+  # One line per bullet on purpose. fill_snippets indents only the first line of a
+  # snippet, and the <<api_key_setup>> markers sit at two different indent levels in
+  # base, so a wrapped bullet renders as a stray paragraph at one of them.
+  api_key_setup: |
+    - Codex CLI: run `export PINECONE_API_KEY="your-key"` in the shell you start `codex` from. The bundled MCP server reads it from Codex's environment.
+    - Codex Desktop on macOS: run `launchctl setenv PINECONE_API_KEY "your-key"`, then quit Codex fully and open it again.
+    - For scripts, you can also use `uv run --env-file .env scripts/...`.
+
+  next_after_create: |
+    1. Upload files: [cyan]uv run upload.py --assistant {name} --source PATH[/cyan]
+    2. Chat: [cyan]uv run chat.py --assistant {name} --message "YOUR QUESTION"[/cyan]
+    3. Get context: [cyan]uv run context.py --assistant {name} --query "SEARCH TEXT"[/cyan]
+
+  next_create_first: "[cyan]uv run create.py --name ASSISTANT_NAME[/cyan]"
+
+  next_commands: |
+    • List with files: [cyan]uv run list.py --files[/cyan]
+    • Chat: [cyan]uv run chat.py --assistant NAME --message "YOUR QUESTION"[/cyan]
+    • Upload: [cyan]uv run upload.py --assistant NAME --source PATH[/cyan]
+    • Context: [cyan]uv run context.py --assistant NAME --query "SEARCH TEXT"[/cyan]
+
+  next_after_upload: |
+    • Chat: [cyan]uv run chat.py --assistant {assistant} --message "YOUR QUESTION"[/cyan]
+    • Context: [cyan]uv run context.py --assistant {assistant} --query "SEARCH TEXT"[/cyan]
+
+  next_after_context: |
+    • Ask a question: [cyan]uv run chat.py --assistant {assistant} --message "YOUR QUESTION"[/cyan]
+    • Upload more files: [cyan]uv run upload.py --assistant {assistant} --source PATH[/cyan]
+
+  next_chat_fallback: 'uv run chat.py --assistant {assistant} --message \"{query}\"'
+
+  # No structured-choice tool here, and check_skills.py fails any skill body that
+  # names AskUserQuestion, so say what to do instead.
+  clarify_style: >
+    Whenever this skill asks the user to choose between options, confirm a
+    destructive step, or pick from a list, ask in plain prose, list the options,
+    and wait for their answer before continuing.
+
+  # Codex resolves a skill from what you ask for. The plugin namespace is
+  # `pinecone`, so a skill is `pinecone:<slug>` when you want to name one exactly.
+  invoke_any_skill: >
+    Ask Codex for any skill by name — for example `pinecone:quickstart` or
+    `pinecone:n8n` — or just describe what you want and Codex picks the skill.
+  invoke_this_skill: "Ask Codex for `pinecone:n8n` to invoke this skill."
