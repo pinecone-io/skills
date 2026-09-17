@@ -3,8 +3,11 @@ name: Sync Skills to Plugin Repos
 # Renders skills/ through tools/build.py and rsyncs the result into each plugin
 # repo, opening one PR per target. Dispatch-only.
 #
-# Branch has NO suffix: contextualize-skills.yml in both plugin repos gates on
-# `sync/skills-` (trailing hyphen), so this name deliberately does not match.
+# Branch has NO suffix. This started as a guard against the old
+# contextualize-skills.yml in the plugin repos, which gated on `sync/skills-`
+# (trailing hyphen) and would otherwise have rewritten every synced file. Those
+# workflows are all gone now — claude and cursor on 2026-08-12, codex on
+# 2026-09-17 — so the name is kept only because the branch is already in use.
 
 on:
   workflow_dispatch:
@@ -16,6 +19,7 @@ on:
           - all
           - pinecone-io/pinecone-claude-code-plugin
           - pinecone-io/pinecone-cursor-plugin
+          - pinecone-io/pinecone-codex-plugin
         default: all
       dry_run:
         description: 'Build, reconcile, and print the plan without opening a PR'
@@ -48,6 +52,9 @@ jobs:
             skills_path: skills
           - name: cursor
             repo: pinecone-io/pinecone-cursor-plugin
+            skills_path: skills
+          - name: codex
+            repo: pinecone-io/pinecone-codex-plugin
             skills_path: skills
 
     name: Sync → ${{ matrix.target.repo }}
@@ -140,8 +147,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
 
-      # --delete verified safe for these two targets only. Re-run reconcile.py before
-      # adding a third.
+      # --delete verified safe for these three targets only. Re-run reconcile.py
+      # before adding a fourth. codex reported EXTRA (0) on 2026-09-17: everything
+      # it keeps outside skills/ (docs/, scripts/, .codex-plugin/) is out of scope
+      # for the rsync, which is confined to skills_path.
       - name: Sync rendered tree into target
         if: steps.gate.outputs.skip == 'false'
         env:
