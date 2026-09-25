@@ -1,0 +1,113 @@
+# Build manifest — Claude Code plugin
+#
+# Consumed by tools/build.py, which renders skills/ -> dist/claude-code/.
+# Every value here was derived from the observed state of the live target repo
+# on 2026-08-05, not from a design document. See targets/README.md for the
+# field reference.
+
+repo: pinecone-io/pinecone-claude-code-plugin
+skills_path: skills
+
+# Directory rename: base `skills/pinecone-assistant/` -> `skills/assistant/`.
+# The plugin namespaces skills via `name:`, so the prefix is redundant on disk.
+dir_name: "{slug}"
+
+# Frontmatter `name:`. Claude Code uses `<plugin>:<skill>` for slash invocation.
+skill_name: "pinecone:{slug}"
+
+# How this target writes a reference to another skill in prose. Base authors
+# these as `pinecone-<slug>`; see README.md for what counts as a reference —
+# a blanket substitution corrupts URLs and index names.
+cross_reference: "pinecone:{slug}"
+
+# Replaces `pinecone_skills:` in the source_tag argument inside .py files.
+source_tag: claude_code_plugin
+
+# Replaces `pinecone-skills` in the `agentic-ide-source` metadata value that
+# pinecone-assistant/scripts/create.py stamps on each assistant it creates.
+# Same shape as source_tag, different consumer.
+ide_source: claude-code-plugin
+
+include:
+  - assistant
+  - cli
+  - docs
+  - full-text-search
+  - help
+  - mcp
+  - n8n
+  - query
+  - quickstart
+
+# Per-skill frontmatter added by this target only. Values are verbatim from the
+# live plugin. Emitted last in the frontmatter block, after argument-hint.
+#
+# Base carries no allowed-tools: the key is Claude-Code-specific and was removed
+# from pinecone-n8n as part of the neutrality pass.
+frontmatter:
+  assistant:
+    allowed-tools: "Bash, Read"
+  cli:
+    allowed-tools: "Bash, Read"
+  docs:
+    allowed-tools: "Read, WebFetch"
+  full-text-search:
+    allowed-tools: "Bash, Read"
+  help:
+    allowed-tools: "Skill, Bash, Read"
+  mcp:
+    allowed-tools: "Read"
+  n8n:
+    allowed-tools: "Write, Read"
+  query:
+    allowed-tools: "Bash, Read"
+  quickstart:
+    allowed-tools: "Skill(pinecone:assistant *), Bash, Read"
+
+# Per-target wording for the `<<name>>` markers in base. See targets/README.md.
+#
+# Claude Code has working slash commands and reads your shell environment, so this
+# target keeps both. The live plugin already said this; base cannot, because the
+# same sentences are wrong for Cursor.
+snippets:
+  api_key_setup: |
+    - Run `export PINECONE_API_KEY="your-key"` in your terminal. Claude Code reads
+      your shell environment, so this is enough.
+    - To use a `.env` file instead, run scripts with `uv run --env-file .env scripts/...`.
+
+  next_after_create: |
+    1. Upload files: [cyan]/pinecone:assistant[/cyan] — upload files from [path] to {name}
+    2. Chat: [cyan]/pinecone:assistant[/cyan] — ask {name} about [your question]
+    3. Get context: [cyan]/pinecone:assistant[/cyan] — search {name} for context about [topic]
+
+  next_create_first: "[cyan]/pinecone:assistant[/cyan] — create a new assistant called [name]"
+
+  next_commands: |
+    • List with files: [cyan]/pinecone:assistant[/cyan] — list my assistants with their files
+    • Chat: [cyan]/pinecone:assistant[/cyan] — ask [name] about [your question]
+    • Upload: [cyan]/pinecone:assistant[/cyan] — upload files from [path] to [name]
+    • Context: [cyan]/pinecone:assistant[/cyan] — search [name] for context about [topic]
+
+  next_after_upload: |
+    • Chat: [cyan]/pinecone:assistant[/cyan] — ask {assistant} about [your question]
+    • Context: [cyan]/pinecone:assistant[/cyan] — search {assistant} for context about [topic]
+
+  next_after_context: |
+    • Ask a question: [cyan]/pinecone:assistant[/cyan] — ask {assistant} about [your question]
+    • Upload more files: [cyan]/pinecone:assistant[/cyan] — upload files from [path] to {assistant}
+
+  next_chat_fallback: '/pinecone:assistant — ask {assistant} about \"{query}\"'
+
+  # This target has a real tool for structured choices, so it says so once here
+  # rather than at each of the fifteen places a skill asks the user something.
+  clarify_style: >
+    Whenever this skill asks the user to choose between options, confirm a
+    destructive step, or pick from a list, use the AskUserQuestion tool rather
+    than plain prose. Fall back to prose only if the tool is unavailable.
+
+  # Claude Code exposes each skill as `/pinecone:<slug>`. The live plugin never said
+  # so; Cursor's copy did, which is where these two lines come from.
+  invoke_any_skill: >
+    Invoke any skill from chat with `/pinecone:<skill-name>` — for example
+    `/pinecone:quickstart` or `/pinecone:n8n`.
+  invoke_this_skill: "Invoke this skill from chat with `/pinecone:n8n`."

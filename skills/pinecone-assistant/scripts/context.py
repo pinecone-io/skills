@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # /// script
+# requires-python = ">=3.10"
 # dependencies = [
-#   "pinecone>=8.0.0",
+#   "pinecone==9.1.0",
 #   "typer>=0.15.0",
 #   "rich>=13.0.0",
 # ]
@@ -27,6 +28,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from pinecone import Pinecone
+from pinecone.models.assistant import TextSnippet
 
 app = typer.Typer()
 console = Console()
@@ -51,8 +53,7 @@ def main(
 
     try:
         # Initialize Pinecone client
-        pc = Pinecone(api_key=api_key, source_tag="claude_code_plugin:assistant")
-        asst = pc.assistant.Assistant(assistant_name=assistant)
+        pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:assistant")
 
         # Display query
         if not json:
@@ -60,7 +61,9 @@ def main(
 
         # Retrieve context
         with console.status("[bold blue]Searching knowledge base...[/bold blue]", spinner="dots"):
-            response = asst.context(query=query, top_k=top_k, snippet_size=snippet_size)
+            response = pc.assistants.context(
+                assistant_name=assistant, query=query, top_k=top_k, snippet_size=snippet_size
+            )
 
         # Get snippets from response
         snippets = response.snippets if hasattr(response, 'snippets') else []
@@ -83,7 +86,10 @@ def main(
                     "pages": pages,
                     "content": getattr(snippet, 'content', ''),
                     "score": getattr(snippet, 'score', 0.0),
-                    "type": getattr(snippet, 'type', 'text'),
+                    # SDK 9 encodes the snippet kind as a msgspec tag, not an
+                    # instance attribute, so getattr(snippet, 'type') silently
+                    # returned the default for every snippet.
+                    "type": "text" if isinstance(snippet, TextSnippet) else "multimodal",
                 })
             print(json_module.dumps({"snippets": results, "count": len(results)}, indent=2))
         else:
@@ -125,8 +131,7 @@ def main(
 
             # Suggest next action
             next_action = f"""[bold]Next steps:[/bold]
-• Ask a question: [cyan]/pinecone:assistant-chat assistant {assistant} message [your question][/cyan]
-• Upload more files: [cyan]/pinecone:assistant-upload assistant {assistant} source [path][/cyan]"""
+<<next_after_context>>"""
             console.print(Panel(next_action, title="What's Next?", border_style="green"))
 
     except AttributeError as e:
@@ -135,7 +140,7 @@ def main(
         console.print(f"[dim]Details: {e}[/dim]")
         console.print("\n[yellow]Note:[/yellow] Context API requires SDK version with assistant.context() support")
         console.print("\n[yellow]Try using chat instead:[/yellow]")
-        console.print(f"  /pinecone:assistant-chat assistant {assistant} message \"{query}\"")
+        console.print(f"  <<next_chat_fallback>>")
         raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")

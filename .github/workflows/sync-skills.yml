@@ -1,122 +1,217 @@
 name: Sync Skills to Plugin Repos
-# Two sync modes:
-#   push → incremental: diffs HEAD~1..HEAD, syncs only changed skill files to ALL target repos
-#   dispatch → full: syncs every file under skills/ to a chosen repo (or all repos)
+
+# Renders skills/ through tools/build.py and rsyncs the result into each plugin
+# repo, opening one PR per target. Dispatch-only.
+#
+# Branch has NO suffix. This started as a guard against the old
+# contextualize-skills.yml in the plugin repos, which gated on `sync/skills-`
+# (trailing hyphen) and would otherwise have rewritten every synced file. Those
+# workflows are all gone now — claude and cursor on 2026-08-12, codex on
+# 2026-09-17 — so the name is kept only because the branch is already in use.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'skills/**'
   workflow_dispatch:
     inputs:
       target_repo:
-        description: 'Target plugin repo (full name, e.g. pinecone-io/pinecone-claude-code-plugin)'
+        description: 'Target plugin repo, or all'
         type: choice
         options:
           - all
           - pinecone-io/pinecone-claude-code-plugin
           - pinecone-io/pinecone-cursor-plugin
-          - pinecone-io/gemini-cli-extension
-          - pinecone-io/kiro-powers
+          - pinecone-io/pinecone-codex-plugin
         default: all
+      dry_run:
+        description: 'Build, reconcile, and print the plan without opening a PR'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One fixed branch per target means two dispatches at once would fight over it.
+# Queue instead of cancelling: a half-applied rsync on a shared branch is worse
+# than waiting.
+concurrency:
+  group: sync-skills
+  cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         target:
-          - repo: 'pinecone-io/pinecone-claude-code-plugin'
-            skills_dir: 'skills'
-          - repo: 'pinecone-io/pinecone-cursor-plugin'
-            skills_dir: 'skills'
-          - repo: 'pinecone-io/gemini-cli-extension'
-            skills_dir: 'skills'
-          - repo: 'pinecone-io/kiro-powers'
-            skills_dir: 'skills'
+          # `name` is the manifest stem in targets/. `skills_path` must match the
+          # manifest's own skills_path — the guard step below fails loudly if it
+          # drifts, rather than syncing into the wrong directory.
+          - name: claude-code
+            repo: pinecone-io/pinecone-claude-code-plugin
+            skills_path: skills
+          - name: cursor
+            repo: pinecone-io/pinecone-cursor-plugin
+            skills_path: skills
+          - name: codex
+            repo: pinecone-io/pinecone-codex-plugin
+            skills_path: skills
 
     name: Sync → ${{ matrix.target.repo }}
 
     steps:
-      # On dispatch, skip matrix entries that don't match the selected repo.
-      # On push, all matrix entries run.
       - name: Check if target matches
         id: gate
+        env:
+          SELECTED: ${{ inputs.target_repo }}
+          THIS_REPO: ${{ matrix.target.repo }}
         run: |
-          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.target_repo }}" == "all" || "${{ inputs.target_repo }}" == "${{ matrix.target.repo }}" ]]; then
-            echo "skip=false" >> $GITHUB_OUTPUT
+          if [[ "$SELECTED" == "all" || "$SELECTED" == "$THIS_REPO" ]]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Skipping ${{ matrix.target.repo }} (selected: ${{ inputs.target_repo }})"
-            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Skipping $THIS_REPO (selected: $SELECTED)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout skills repo
         if: steps.gate.outputs.skip == 'false'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          fetch-depth: 2
+          persist-credentials: false
 
-      # Dispatch: sync all skill files (full override).
-      # Push: sync only files added/modified in the triggering commit.
-      - name: Find skill files to sync
+      - name: Install uv
         if: steps.gate.outputs.skip == 'false'
-        id: changed
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "Full sync (workflow_dispatch)"
-            files=$(find skills -type f | sort | tr '\n' ' ')
-          else
-            echo "Incremental sync (push to main)"
-            files=$(git diff --diff-filter=AM --name-only HEAD~1 HEAD -- skills/ | tr '\n' ' ')
-          fi
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
 
-          if [[ -z "$files" ]]; then
-            echo "No skill files to sync."
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "Files to sync: $files"
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "files=$files" >> $GITHUB_OUTPUT
+      # --check runs the build's own assertions: cursor output is byte-identical to
+      # base except source_tag, no rendered file still carries the neutral tag, and
+      # building twice produces identical bytes. A build that fails its own checks
+      # must not reach a target repo.
+      - name: Render dist/
+        if: steps.gate.outputs.skip == 'false'
+        run: uv run tools/build.py --all --check
+
+      - name: Guard — rendered tree exists where the matrix says
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          SRC: dist/${{ matrix.target.name }}/${{ matrix.target.skills_path }}
+          TARGET: ${{ matrix.target.name }}
+        run: |
+          if [[ ! -d "$SRC" ]]; then
+            echo "::error::$SRC does not exist. The matrix entry for $TARGET" \
+                 "disagrees with targets/$TARGET.yaml." >&2
+            exit 1
           fi
+          echo "$(find "$SRC" -type f | wc -l) files rendered"
 
       - name: Checkout target repo
-        if: steps.gate.outputs.skip == 'false' && steps.changed.outputs.has_changes == 'true'
-        uses: actions/checkout@v4
+        if: steps.gate.outputs.skip == 'false'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: ${{ matrix.target.repo }}
           token: ${{ secrets.PLUGIN_SYNC_PAT }}
           path: target-repo
+          persist-credentials: false
 
-      - name: Copy skill files
-        if: steps.gate.outputs.skip == 'false' && steps.changed.outputs.has_changes == 'true'
+      # Runs against the target's PRE-sync state, so the report describes what this
+      # PR is about to do. Never gates: on the first sync every difference is the
+      # payload, and reconcile.py exits nonzero whenever any remain. After cutover
+      # the expected report is "in sync", and anything else is drift worth reading.
+      - name: Reconcile — what this sync will change
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          TARGET: ${{ matrix.target.name }}
+          TARGET_REPO: ${{ matrix.target.repo }}
         run: |
-          for file in ${{ steps.changed.outputs.files }}; do
-            # Preserve directory structure under skills/
-            rel="${file#skills/}"
-            dest="target-repo/${{ matrix.target.skills_dir }}/$rel"
-            mkdir -p "$(dirname "$dest")"
-            cp "$file" "$dest"
-            echo "Copied: $file → $dest"
-          done
+          set +e
+          uv run tools/reconcile.py \
+            --target "$TARGET" \
+            --clone target-repo \
+            --ref HEAD > "$RUNNER_TEMP/reconcile.txt" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/reconcile.txt"
+          # 0 = in sync, 1 = discrepancies, which is the normal case pre-cutover.
+          # Anything higher is reconcile.py itself failing — a bad manifest, an
+          # unreadable clone. Do not paste a traceback into a PR body and call it a
+          # report.
+          if [[ $code -gt 1 ]]; then
+            echo "::error::reconcile.py failed with exit $code" >&2
+            exit 1
+          fi
+          {
+            echo "### $TARGET_REPO"
+            echo '```'
+            cat "$RUNNER_TEMP/reconcile.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+      # --delete verified safe for these three targets only. Re-run reconcile.py
+      # before adding a fourth. codex reported EXTRA (0) on 2026-09-17: everything
+      # it keeps outside skills/ (docs/, scripts/, .codex-plugin/) is out of scope
+      # for the rsync, which is confined to skills_path.
+      - name: Sync rendered tree into target
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          SRC: dist/${{ matrix.target.name }}/${{ matrix.target.skills_path }}/
+          DEST: target-repo/${{ matrix.target.skills_path }}/
+        run: |
+          mkdir -p "$DEST"
+          rsync -a --delete --itemize-changes "$SRC" "$DEST"
+
+      - name: Compose PR body
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          TARGET: ${{ matrix.target.name }}
+        run: |
+          {
+            echo "Rendered from [\`${GITHUB_SHA:0:7}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA})"
+            echo "by [run #${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+            echo
+            echo "\`tools/build.py\` is a pure function of \`skills/\` plus"
+            echo "\`targets/$TARGET.yaml\`, so this diff is reproducible:"
+            echo
+            echo '```bash'
+            echo "git checkout ${GITHUB_SHA}"
+            echo "uv run tools/build.py --target $TARGET --check"
+            echo '```'
+            echo
+            echo "## What changed, before this PR was applied"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/reconcile.txt"
+            echo '```'
+            echo
+            echo "\`MISSING\` was added, \`EXTRA\` was removed, \`DIFFERS\` was overwritten."
+            echo
+            echo "Skills are no longer adapted by an agent in this repo — every"
+            echo "IDE-specific value comes from the target manifest. Review the diff"
+            echo "as content, not as a transform."
+          } > "$RUNNER_TEMP/pr-body.md"
+          cat "$RUNNER_TEMP/pr-body.md"
 
       - name: Open PR
-        if: steps.gate.outputs.skip == 'false' && steps.changed.outputs.has_changes == 'true'
-        uses: peter-evans/create-pull-request@v6
+        if: steps.gate.outputs.skip == 'false' && inputs.dry_run != true
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
         with:
           token: ${{ secrets.PLUGIN_SYNC_PAT }}
           path: target-repo
-          branch: sync/skills-${{ github.run_id }}
-          title: 'sync: skills update from pinecone-io/skills'
-          body: |
-            Automated skill sync from [pinecone-io/skills](https://github.com/pinecone-io/skills) — run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+          branch: sync/skills
+          title: 'sync: skills from pinecone-io/skills'
+          # Absolute. The action documents `path` as relative to the workspace but
+          # says nothing about what `body-path` is relative to, so do not guess.
+          body-path: ${{ runner.temp }}/pr-body.md
+          commit-message: |
+            sync: render skills from pinecone-io/skills@${{ github.sha }}
 
-            **Changed files:**
-            ```
-            ${{ steps.changed.outputs.files }}
-            ```
+            Generated by tools/build.py. Do not edit by hand — edits here are
+            overwritten by the next sync.
+          labels: skill-sync
+          delete-branch: false
 
-            The contextualization workflow will run automatically on this branch to adapt these skills for this IDE. Review both the raw sync and Claude's adaptations before merging.
-          labels: 'skill-sync'
-          draft: false
+      - name: Dry run — no PR opened
+        if: steps.gate.outputs.skip == 'false' && inputs.dry_run == true
+        run: |
+          echo "dry_run: skipped opening a PR. Pending changes in target-repo:"
+          git -C target-repo status --short

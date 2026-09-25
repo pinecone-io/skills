@@ -3,7 +3,7 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #   "typer>=0.12",
-#   "pinecone==9.0.0",
+#   "pinecone==10.0.0",
 # ]
 # ///
 """Ingest a JSONL file into a Pinecone FTS index — safely.
@@ -157,15 +157,13 @@ def poll_until_searchable(
 
 
 def resolve_index_with_retry(pc, name: str, *, deadline_s: int = 60):
-    """Resolve `pc.preview.index(name=...)`, retrying briefly during data-plane warmup.
-
-    """
+    """Resolve `pc.index(name=...)`, retrying briefly during data-plane warmup."""
     deadline = time.time() + deadline_s
     delay = 2.0
     last_exc = None
     while time.time() < deadline:
         try:
-            return pc.preview.index(name=name)
+            return pc.index(name=name)
         except Exception as exc:
             last_exc = exc
             time.sleep(delay)
@@ -211,9 +209,9 @@ def main(
         help="Index namespace.",
     ),
     batch_size: int = typer.Option(
-        100, "--batch-size", "-b", min=1, max=200,
+        50, "--batch-size", "-b", min=1, max=200,
         help="Documents per batch_upsert call. Reduce if your dense vectors are large "
-             "(e.g. 50 for dim=3072) and you hit payload-size errors.",
+             "(e.g. 25 for dim=3072) and you hit payload-size errors.",
     ),
     poll_deadline: int = typer.Option(
         300, "--poll-deadline", min=10, max=3600,

@@ -6,3 +6,23 @@ docs/
 
 # macOS Finder metadata
 .DS_Store
+
+# Local secrets — never commit
+.env
+.env.*
+!.env.example
+
+# build output — rendered per-target trees
+dist/
+
+# cultivar results
+results/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Eval baseline docs — built locally, never committed. A vendored copy of the
+# Pinecone docs goes stale silently. See tasks/README.md.
+baseline-doc.md
+tasks/baseline-doc.md

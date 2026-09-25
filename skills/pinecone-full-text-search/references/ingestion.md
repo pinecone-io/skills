@@ -1,11 +1,11 @@
 # Ingestion
 
-Writing documents into a Pinecone preview document index uses two methods. Pick based on volume, then handle the *async indexing* gotcha on the other side.
+Writing documents into a Pinecone document index uses two methods. Pick based on volume, then handle the *async indexing* gotcha on the other side.
 
 ## `documents.upsert` — small writes / patches
 
 ```python
-idx = pc.preview.index(name=INDEX_NAME)
+idx = pc.index(name=INDEX_NAME)
 
 upsert_resp = idx.documents.upsert(
     namespace=NAMESPACE,
@@ -14,10 +14,10 @@ upsert_resp = idx.documents.upsert(
             "_id": "doc-1",
             "title": "A landmark work that every reader should experience.",
             "body": "Lorem ipsum...",
-            "category": "fiction",
+            "category": "fiction",   # not declared in schema — auto-indexed for filtering anyway
             "year": 2024.0,
         },
-        # ... up to ~1000 documents per call (per public-preview docs)
+        # ... up to ~1000 documents per call
     ],
 )
 print(upsert_resp.upserted_count)
@@ -26,10 +26,10 @@ print(upsert_resp.upserted_count)
 Use `upsert` when:
 
 - You're writing a single document (e.g. a sentinel doc to verify end-to-end before a bulk load).
-- You're "patching" a doc after a correction. *Note*: `2026-01.alpha` has **no per-field merge** — every upsert replaces the entire document on conflicting `_id`. To update a single field, fetch the doc, modify in client code, and upsert the full doc back under the same `_id`.
 - You're streaming writes from user actions and each request fits in a single batch.
+- You want to fully replace a document by `_id` (upsert always replaces the whole document on conflict — for a true per-field patch, use `documents.update` below instead).
 
-Each document is a dict keyed by field name. `_id` is required and must be a non-empty unique string within the namespace. Values must match the declared schema types (FTS strings → `str`, filterable `float` → `int|float`, dense vectors → `list[float]`, sparse → `{"indices": [...], "values": [...]}`). Field names that start with `_` or `$` are rejected; field names are limited to 64 bytes.
+Each document is a dict keyed by field name (or a `DocumentRecord`/`UpdateDocumentRecord` instance — both accept a plain dict positionally or fields as keyword arguments). `_id` is required and must be a non-empty unique string within the namespace. Values must match the declared schema types for the few fields actually declared in the schema (FTS strings → `str`, dense vectors → `list[float]`, sparse → `{"indices": [...], "values": [...]}`); every other field on the document — strings, numbers, booleans, string lists — is auto-indexed metadata with nothing declared for it. Field names that start with `_` or `$` are rejected; field names are limited to 64 bytes.
 
 The endpoint returns `202 Accepted` (async) and the body's `upserted_count` is the number of items accepted, not the number that have finished indexing.
 
@@ -39,8 +39,8 @@ The endpoint returns `202 Accepted` (async) and the body's `upserted_count` is t
 result = idx.documents.batch_upsert(
     namespace=NAMESPACE,
     documents=documents,        # list of dicts, any length
-    batch_size=50,
-    max_workers=2,
+    batch_size=50,               # SDK default
+    max_concurrency=4,           # SDK default
     show_progress=True,
 )
 print(f"{result.successful_item_count:,} / {result.total_item_count:,} succeeded")
@@ -54,17 +54,17 @@ if result.has_errors:
               f"first _id={sample!r}): {err.error_message}")
 ```
 
-The SDK splits `documents` into `batch_size`-sized chunks and uploads them over `max_workers` parallel HTTP connections. `show_progress=True` prints a tqdm-style bar.
+The SDK splits `documents` into `batch_size`-sized chunks and uploads them over `max_concurrency` parallel HTTP connections. `show_progress=True` prints a tqdm-style bar. `max_concurrency` must be a plain `int` (default `4`) — it no longer accepts `None`.
 
-### Tuning `batch_size` and `max_workers`
+### Tuning `batch_size` and `max_concurrency`
 
-- **`batch_size=50`** is the sweet spot — comfortably below the per-request cap and small enough that transient failures cost less to redo.
-- **`max_workers=2`** is a safe default. Bump to `4` for large (thousands-of-docs) loads where you're not simultaneously embedding. Ramp cautiously above 4 — you'll hit Pinecone or upstream embedding-provider rate limits first.
-- If you're embedding on the fly (computing vectors inside the upsert loop), keep `max_workers` low so embedding latency dominates rather than index write latency.
+- **`batch_size=50`** (the SDK's own default) is the sweet spot — comfortably below the per-request cap and small enough that transient failures cost less to redo.
+- **`max_concurrency=4`** (the SDK's own default) is a safe default for large (thousands-of-docs) loads where you're not simultaneously embedding. Ramp cautiously above 4 — you'll hit Pinecone or upstream embedding-provider rate limits first.
+- If you're embedding on the fly (computing vectors inside the upsert loop), keep `max_concurrency` low so embedding latency dominates rather than index write latency.
 
 ### Document and request size caps
 
-**Hard limits in `2026-01.alpha`:**
+**Hard limits in `2026-07`:**
 
 - **Per document**: max **2 MB** (serialized JSON, all stored fields combined).
 - **Per `full_text_search` string field**: max **100 KB** AND max **10,000 tokens**. Tokens longer than 256 bytes are silently truncated by the analyzer.
@@ -76,7 +76,7 @@ If any one of these is exceeded, the batch fails as a whole. The most common lim
 
 ### Dense-vector payload size
 
-A high-dimensional dense field can silently turn a 50-doc batch into a 5–10 MB request, which the preview backend will reject wholesale. If every batch fails and the error message is opaque, the first thing to try is dropping the embedding dimension before debugging schema:
+A high-dimensional dense field can silently turn a 50-doc batch into a 5–10 MB request, which the backend will reject wholesale. If every batch fails and the error message is opaque, the first thing to try is dropping the embedding dimension before debugging schema:
 
 - **Gemini**: pass `config=types.EmbedContentConfig(output_dimensionality=768)`. The model uses Matryoshka representations, so smaller dimensions are valid truncations of the native output. 768 is usually a 4× payload reduction vs. the native 3072 and costs very little quality.
 - **OpenAI `text-embedding-3-*`**: pass `dimensions=768` (or similar) to `embeddings.create`.
@@ -85,6 +85,8 @@ A high-dimensional dense field can silently turn a 50-doc batch into a 5–10 MB
 ## The async-indexing footgun
 
 After `batch_upsert` returns, **your documents are written but not yet searchable.** The server builds inverted indexes for FTS fields and ANN graphs for vector fields in the background. A search query issued immediately will return empty matches. Schemas with multiple indexed fields (e.g. text + dense + sparse) may take slightly longer.
+
+This is distinct from — and in addition to — `pc.indexes.create(...)`'s own polling for the *index itself* to become ready (which it does by default before returning). Even a fully-ready index needs this separate poll after each ingest.
 
 **Always poll with a deadline** before trusting the index:
 
@@ -111,7 +113,7 @@ Pick a sentinel query likely to hit at least one document. For a typical corpus,
 
 ## Chunking oversized text
 
-Per the public-preview docs (above), the per-FTS-field hard limits are 100 KB and 10,000 tokens. In practice, plan for the *token* limit kicking in first on natural prose (~5,000 English words at ~2 tokens each is the rough ceiling). Probe before ingesting at scale — chunk anything that approaches either bound, with safety margin.
+Per the size caps above, the per-FTS-field hard limits are 100 KB and 10,000 tokens. In practice, plan for the *token* limit kicking in first on natural prose (~5,000 English words at ~2 tokens each is the rough ceiling). Probe before ingesting at scale — chunk anything that approaches either bound, with safety margin.
 
 **Strategy: probe first, then chunk if needed.**
 
@@ -158,39 +160,79 @@ Conventions:
 
 ## Updating documents
 
-There is **no per-field update or merge** in `2026-01.alpha`. `documents.upsert` always replaces the entire document for a given `_id`. To update one field:
+`2026-07` has real per-field updates via `documents.update(...)` — this replaces the fetch → modify → re-upsert workaround from the old preview API. Two shapes:
+
+**By `_id`, patching specific fields:**
 
 ```python
-fetched = idx.documents.fetch(
+idx.documents.update(
     namespace=NAMESPACE,
-    ids=["doc-42"],
-    include_fields=["*"],          # need the full doc to round-trip it
+    documents=[{"_id": "doc-42", "set_fields": {"category": "biography"}}],
 )
-doc = fetched.documents["doc-42"].to_dict()
-doc["category"] = "biography"      # patch in client code
-
-idx.documents.upsert(namespace=NAMESPACE, documents=[doc])
 ```
 
-If the document includes a dense vector, you re-upsert that vector verbatim. If it changes, embed the new content first.
+**By filter, patching every matching document at once:**
+
+```python
+resp = idx.documents.update(
+    namespace=NAMESPACE,
+    filter={"category": {"$eq": "fiction"}},
+    set_fields={"featured": True},
+    # remove_fields=["stale_field"],   # drop a field entirely, by name
+)
+print(resp.matched_records)   # point-in-time count, same semantics as documents.delete
+```
+
+`documents.update` accepts `documents=` (a list of per-record patches) *or* `filter=` + `set_fields=`/`remove_fields=` (a bulk patch by metadata match) — not both. `set_fields` merges into the existing document; fields you don't mention are left untouched. `remove_fields` deletes named fields outright. For a filtered update, `matched_records` on the response is a point-in-time count when the server accepted the request, the same caveat as `documents.delete`'s `matched_records` — the update itself applies asynchronously.
+
+If you need to fully replace a document (including its vector fields) rather than patch it, `documents.upsert` with the complete document under the same `_id` is still the right tool — `upsert` replaces, `update` patches.
 
 ## Deletes
 
-`documents.delete` accepts either `ids: [...]` (1–1000 items) or `delete_all: true`. There is **no delete-by-filter** — to delete documents matching a metadata expression, search first to collect IDs, then pass them in:
+`documents.delete` accepts exactly one of `ids: [...]` (1–1000 items), `filter: {...}`, or `delete_all: true`:
 
 ```python
-ids_to_kill = [
-    m._id for m in idx.documents.search(
-        namespace=NAMESPACE, top_k=1000,
-        score_by=[{"type": "text", "field": "body", "query": "deprecated"}],
-        filter={"category": {"$eq": "archive"}},
-        include_fields=[],
-    ).matches
-]
-idx.documents.delete(namespace=NAMESPACE, ids=ids_to_kill)
+# Delete-by-filter — no need to search for IDs first anymore.
+resp = idx.documents.delete(namespace=NAMESPACE, filter={"category": {"$eq": "archive"}})
+print(resp.matched_records)
 ```
 
 `delete_all=True` wipes the entire namespace. Use carefully.
+
+## Namespace management
+
+Confirmed working against document-schema indexes in `2026-07` — this was **not** supported in the old preview API, which could write to a namespace but not list, describe, create, or delete one via the API.
+
+```python
+# Create explicitly (namespaces otherwise auto-create on first upsert — see below).
+ns = idx.create_namespace(name="movies-en")
+print(ns.name, ns.record_count, ns.size_bytes)
+
+# List every namespace on the index in one call.
+for page in idx.list_namespaces():
+    for ns in page.namespaces:
+        print(ns.name, ns.record_count)
+
+# Describe one namespace. Prefer list_namespaces() over repeated describe_namespace()
+# calls — describe_namespace is rate-limited per index; list_namespaces isn't.
+ns = idx.describe_namespace(name="movies-en")
+
+# Delete a namespace and everything in it.
+idx.delete_namespace(name="movies-en")
+```
+
+`create_namespace`'s optional `schema` parameter (`{"fields": {"<field>": {"filterable": True}}}`) controls *which metadata fields get indexed for filtering in that namespace specifically* — omitting it means the namespace inherits the index's own metadata-indexing configuration, which for the managed indexes this skill covers is "index everything" by default (see "Filterable metadata isn't declared in the schema at all" in SKILL.md). There's rarely a reason to pass it explicitly unless you're deliberately restricting which fields are filterable in one namespace.
+
+`__default__` is reserved — it always exists and can't be created or deleted; every namespace-taking call already defaults to it when `namespace` is omitted, but it's worth knowing when you see it show up unbidden in a `list_namespaces()` result.
+
+### `describe_index_stats` — also now works
+
+```python
+stats = idx.describe_index_stats()
+print(stats.total_vector_count, stats.namespaces)   # total record count, namespace count
+```
+
+`describe_index_stats(filter=...)` is documented as rejected on every index type (there's no operation that returns a filtered count) — call it with no arguments.
 
 ## Integrating embedding providers
 
@@ -256,8 +298,7 @@ This adapter also gives you a single chokepoint for retries, rate-limit backoff,
 
 ## Limits to be aware of
 
-- **No bulk import (S3 import job)** for document-shaped indexes in `2026-01.alpha`. Load through `documents.upsert` / `documents.batch_upsert`.
+- **Bulk import (from object storage) is out of scope for this skill, not unsupported by Pinecone.** Pinecone supports bulk import for document-shaped indexes in `2026-07` (JSON Lines format — see [Import data](https://docs.pinecone.io/guides/index-data/import-data)); this skill just doesn't implement it. Load through `documents.upsert` / `documents.batch_upsert` here, or use a dedicated import skill when one exists.
 - **No backup/restore.** If you need recoverability, snapshot your source data, not the index.
-- **No CMEK projects** — indexes can't be created in CMEK-enabled projects.
+- **No CMEK projects alongside any `full_text_search` field** — such indexes can't be created in CMEK-enabled projects.
 - **Indexing latency**: documents become searchable in ≲1 minute typically; multi-field schemas can take slightly longer.
-

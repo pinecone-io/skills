@@ -1,10 +1,11 @@
 ---
 name: pinecone-n8n
 description: Build n8n workflows using the Pinecone Assistant node or Pinecone Vector Store node. Use when building RAG pipelines, chat-with-docs workflows, configuring Pinecone nodes in n8n, troubleshooting Pinecone n8n nodes, or asking about best practices for Pinecone in n8n.
-allowed-tools: Write
 ---
 
 # Pinecone n8n Workflow Skill
+
+<<invoke_this_skill>>
 
 This skill helps you build n8n workflows with Pinecone nodes following best practices. It covers two Pinecone nodes:
 - **Pinecone Assistant** (`@pinecone-database/n8n-nodes-pinecone-assistant`) — recommended for most use cases

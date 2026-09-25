@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # /// script
+# requires-python = ">=3.10"
 # dependencies = [
-#   "pinecone>=8.0.0",
+#   "pinecone==9.1.0",
 #   "typer>=0.15.0",
 #   "rich>=13.0.0",
 # ]
@@ -118,8 +119,12 @@ def main(
 
     try:
         # Initialize Pinecone client
-        pc = Pinecone(api_key=api_key, source_tag="claude_code_plugin:assistant")
-        asst = pc.assistant.Assistant(assistant_name=assistant)
+        pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:assistant")
+        # describe() returns a model carrying a client back-reference, so the
+        # asst.list_files()/upload_file()/delete_file() calls below keep working.
+        # Its list_files() also materializes, unlike pc.assistants.list_files(),
+        # which returns a Paginator with no __len__.
+        asst = pc.assistants.describe(name=assistant)
 
         console.print(Panel(
             f"[bold cyan]Assistant:[/bold cyan] {assistant}\n"

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # /// script
+# requires-python = ">=3.10"
 # dependencies = [
-#   "pinecone>=8.0.0",
+#   "pinecone==9.1.0",
 #   "typer>=0.15.0",
 #   "rich>=13.0.0",
 # ]
@@ -69,7 +70,7 @@ def main(
     try:
         # Initialize Pinecone client
         with console.status(f"[bold blue]Creating assistant '{name}'...[/bold blue]"):
-            pc = Pinecone(api_key=api_key, source_tag="claude_code_plugin:assistant")
+            pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:assistant")
 
             # Create assistant
             assistant = pc.assistant.create_assistant(
@@ -77,7 +78,7 @@ def main(
                 instructions=instructions if instructions else None,
                 region=region,
                 timeout=timeout,
-                metadata={"agentic-ide-source":"claude-code-plugin"}
+                metadata={"agentic-ide-source":"pinecone-skills"}
             )
 
         # Success message
@@ -111,9 +112,7 @@ export PINECONE_ASSISTANT_HOST="{host}"
 
         # Next steps
         next_steps = f"""[bold]Next steps:[/bold]
-1. Upload files: [cyan]/pinecone:assistant-upload assistant {name} source [path][/cyan]
-2. Chat: [cyan]/pinecone:assistant-chat assistant {name} message [your question][/cyan]
-3. Get context: [cyan]/pinecone:assistant-context assistant {name} query [search][/cyan]"""
+<<next_after_create>>"""
 
         console.print(Panel(next_steps, title="What's Next?", border_style="green"))
 

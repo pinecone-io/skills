@@ -8,12 +8,13 @@ description: Interactive Pinecone quickstart for new developers. Choose between 
 Welcome! This skill walks you through your first Pinecone experience using the tools available to you. In this quickstart,
 you will learn how to do a simple form of semantic search over some example data.
 
+<<clarify_style>>
+
 ## Prerequisites
 
 Before starting either path, verify the API key works by calling `list-indexes` via the Pinecone MCP. If it succeeds, proceed. If it fails, ask the user to set their key:
 
-- Terminal: `export PINECONE_API_KEY="your-key"`
-- Or create a `.env` file in the project root: `PINECONE_API_KEY=your-key`
+<<api_key_setup>>
 
 Then retry `list-indexes` to confirm.
 
@@ -150,7 +151,7 @@ Tell the user:
 
 ## Path B: Assistant Quickstart
 
-Guide the user through the Pinecone Assistant workflow using the existing assistant skills:
+Guide the user through the Pinecone Assistant workflow using the existing pinecone-assistant skill:
 
 ### Step 1 – Check for Documents
 
@@ -192,7 +193,7 @@ Explain: Responses include citations with source file and page number.
 ### Next Steps for Assistant
 
 - Invoke `pinecone-assistant` to keep the assistant up to date as documents change
-- Use the assistant skill to retrieve raw context snippets for custom workflows
+- Use the pinecone-assistant skill to retrieve raw context snippets for custom workflows
 - Every assistant is also an MCP server — see https://docs.pinecone.io/guides/assistant/mcp-server
 
 ---
@@ -201,15 +202,9 @@ Explain: Responses include citations with source file and page number.
 
 **`PINECONE_API_KEY` not set**
 
-Terminal environments:
-```bash
-export PINECONE_API_KEY="your-key"
-```
-IDEs that don't inherit shell variables: create a `.env` file in the project root:
-```
-PINECONE_API_KEY=your-key
-```
-Then use `uv run --env-file .env` when running scripts. Restart your IDE/agent session after setting.
+<<api_key_setup>>
+
+Restart your IDE or agent session after setting the key.
 
 **MCP tools not available**
 - Verify the Pinecone MCP server is configured in your IDE's MCP settings

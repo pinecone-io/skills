@@ -48,7 +48,7 @@ If any text field exceeds **100 KB** (or roughly **10,000 tokens** ≈ ~5,000 En
 If types don't match what an FTS schema would want:
 - **Numbers stored as strings**: "Your `year` field is a string like `"2024"`. The schema needs a number. I'll coerce — but if any value can't be parsed, I'll abort and show you the offending row."
 - **Booleans as strings**: same. "Convert `"true"` / `"false"` to booleans?"
-- **Comma-separated tags**: "`tags` is a string `'classic,american'`. The schema would index tags as a list. I'll split on `,` — speak up if your data uses a different separator."
+- **Comma-separated tags**: "`tags` is a string `'classic,american'`. I'll split it into a list at ingest time — speak up if your data uses a different separator." (Same as `category`: the resulting list isn't declared in the schema either — it's just included on each document and auto-indexes for `$in`/`$nin` filtering — see Stage 3.)
 - **Dates / timestamps**: "Pinecone has no date type. We'll either store as ISO-8601 strings (filterable for exact match), or convert to epoch milliseconds (filterable as numeric). Which do you want?"
 
 ### Missing fields
@@ -81,22 +81,19 @@ If any field starts with `_` or `$`:
 >     # Searchable text — long prose, stemming on so "running" matches "ran"
 >     .add_string_field("body", full_text_search={"language":"en", "stemming":True})
 >     # Searchable text — short titles, stemming off (proper nouns shouldn't over-match)
->     .add_string_field("title", full_text_search={})
->     # Filter only — exact-match category like "fiction"
->     .add_string_field("category", filterable=True)
->     # Numeric range filter (e.g. year > 2024)
->     .add_integer_field("year", filterable=True)
->     # Tag filter — list membership ($in)
->     .add_string_list_field("tags", filterable=True)
+>     .add_string_field("title", full_text_search=True)
 >     .build()
 > ```
 >
-> A few notes:
-> - **No dense_vector field** — you said you don't have embeddings yet. We can add one later, but it requires creating a *new* index because schemas are immutable. Want to add a placeholder now and keep the door open?
-> - **`year` uses `add_integer_field`** but Pinecone stores it as `float` on the wire. The naming is confusing but normal — there's no separate integer type.
-> - **`tags`** will become `["a","b","c"]` after the comma-split we discussed.
+> Notice `category`, `year`, and `tags` are ALL absent from this schema — on a managed index (this one), the schema can only hold fields that participate in *search*: FTS strings and vectors. Every filterable-metadata type, not just plain strings, gets rejected with a 400 if declared here.
 >
-> Schemas are immutable in `2026-01.alpha` — once we create this, changing it means re-creating the index and re-ingesting all the data.
+> A few notes:
+> - **`category`, `year`, and `tags` all just get included on every upserted document instead** — Pinecone indexes each one for filtering automatically (exact-match for `category`, numeric range for `year`, list-membership `$in`/`$nin` for `tags`), with nothing to declare up front for any of them.
+> - **No dense_vector field** — you said you don't have embeddings yet. We can add one later, but it requires creating a *new* index because schemas are immutable. Want to add a placeholder now and keep the door open?
+> - **`year` upserts as a Python `float`** (e.g. `2024.0`) — there's no integer wire type, schema-declared or not.
+> - **`tags`** will become `["a","b","c"]` after the comma-split we discussed — a plain Python list on the document, no schema field needed.
+>
+> Schemas are immutable in `2026-07` — once we create this, changing it means re-creating the index and re-ingesting all the data.
 
 **ASK** (one question this time): "Look right? Want to adjust anything before I create the index?"
 
@@ -106,10 +103,10 @@ If any field starts with `_` or `$`:
 
 Once approved:
 1. Write the Python (`create.py` or inline) using the approved schema.
-2. Run it. Poll until `pc.preview.indexes.describe(name).status.ready: True`.
+2. Run it: `pc.indexes.create(name=..., schema=schema, deployment={"deployment_type": "managed", "cloud": ..., "region": ...})`. This polls internally and returns only once the index is ready — no separate wait loop needed.
 3. Tell the user when it's ready: "Index `<name>` created and ready. Now ingesting your data."
 
-If creation fails for a reason you didn't anticipate (e.g. name conflict, region mismatch, CMEK restriction), tell the user the specific error and how to fix — don't auto-retry under a different name without asking.
+If creation fails for a reason you didn't anticipate (e.g. name conflict, region mismatch, CMEK restriction, or a `400` on a filterable metadata field — string, string_list, float, or boolean — that snuck back into the schema), tell the user the specific error and how to fix — don't auto-retry under a different name without asking.
 
 ## Stage 5 — Process and ingest
 
@@ -140,8 +137,9 @@ Tell them:
 1. **The index name and schema** in one line.
 2. **How to query** — give them a copy-pasteable `idx.documents.search(...)` snippet shaped to their schema (one `score_by` clause + the `include_fields` they care about). Refer them to the **Querying** section in SKILL.md or `references/querying.md` for variations.
 3. **How to ingest more** — `scripts/ingest.py` with the same `--sentinel-field` they should use.
-4. **How to delete** — `pc.preview.indexes.delete("<name>")` when done.
-5. **What's in the way of changing the schema** — recreate + re-ingest, no schema migration.
+4. **How to update or delete records** — `idx.documents.update(...)` for per-field patches (by `_id` or by `filter`), `idx.documents.delete(...)` for removal (by `ids`, `filter`, or `delete_all`). See `references/ingestion.md`.
+5. **How to delete the whole index** — `pc.indexes.delete("<name>")` when done.
+6. **What's in the way of changing the schema** — recreate + re-ingest, no schema migration.
 
 Optionally save a small `README.md` in the working directory with the same info, so they have it when they come back.
 
@@ -149,8 +147,9 @@ Optionally save a small `README.md` in the working directory with the same info,
 
 - **Don't decide silently.** Every decision in Stage 2 should be surfaced. If you assume a separator, a coercion, a dedup policy, you'll be wrong sometimes and the user won't know to push back.
 - **Don't call `indexes.create()` without explicit approval** — schemas are immutable.
+- **Don't declare any filterable metadata field in the schema** — string, string_list, float, or boolean alike. On a managed index all of them are rejected at create time. Include them on documents instead — see Stage 3.
 - **Don't write a giant pre-flight script** that does Stages 1-2 in code without ever showing the user. The point is the conversation, not the automation.
-- **Don't skip Stage 6.** Polling says the index is "ready"; only a real query confirms the documents are there in the shape you expected.
+- **Don't skip Stage 6.** `pc.indexes.create()` returning means the *index* is ready — it says nothing about whether your just-ingested *documents* are searchable yet. Only a real query confirms the documents are there in the shape you expected.
 - **Don't add a dense_vector field "just in case."** It commits the user to a specific embedding dimension forever — and if they don't have embeddings to ingest, the field is useless.
 - **Don't promise reversibility.** Whenever you say "we can change this later," follow up with: "...by creating a new index and re-ingesting. There's no schema migration."
 

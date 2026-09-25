@@ -1,6 +1,6 @@
 # Querying
 
-All reads on a Pinecone preview document index go through `idx.documents.search(...)` (ranked) or `idx.documents.fetch(...)` (direct, ID-only). The interesting shape is the **single** `score_by` clause and the `filter={...}` predicate — everything else is plumbing.
+All reads on a Pinecone document index go through `idx.documents.search(...)` (ranked), `idx.documents.fetch(...)` (direct, by ID or filter), or `idx.documents.list(...)` (enumerate IDs). The interesting shape is the **single** `score_by` clause and the `filter={...}` predicate — everything else is plumbing.
 
 ## The one-scoring-type rule
 
@@ -12,7 +12,7 @@ A single `documents.search` request ranks by **one** scoring type. `score_by` ac
 - `sparse_vector` clauses must appear alone.
 - You **cannot** blend types — no `text` + `query_string`, no `text` + `dense_vector`, no cross-type mix. The server rejects it.
 
-To compose lexical and dense / sparse signals, put the lexical signal in `filter` via the text-match operators (`$match_phrase` / `$match_all` / `$match_any`) and let the vector clause in `score_by` do the ranking. That's the supported hybrid pattern in `2026-01.alpha`.
+To compose lexical and dense / sparse signals, put the lexical signal in `filter` via the text-match operators (`$match_phrase` / `$match_all` / `$match_any`) and let the vector clause in `score_by` do the ranking. That's the supported hybrid pattern in `2026-07`.
 
 ## `score_by` signal types
 
@@ -45,7 +45,7 @@ resp = idx.documents.search(
 )
 ```
 
-Supported operators (full table in the public-preview docs, summarized here):
+Supported operators (full table in the public docs, summarized here):
 
 | Operator       | Syntax              | Example                           |
 |----------------|---------------------|-----------------------------------|
@@ -58,9 +58,13 @@ Supported operators (full table in the public-preview docs, summarized here):
 | Phrase slop    | `"…"~N`             | `body:("fast search"~2)`          |
 | Boost          | `term^N`            | `body:(machine^3 learning)`       |
 | Phrase prefix  | `"… word"*`         | `body:("james w"*)`               |
+| Fuzzy term     | `term~N` or `term~` | `body:(compxter~1)`               |
+| Regex          | `field:/pattern/`   | `body:/comput.*/`                 |
 | Cross-field    | `f1:(…) OR f2:(…)`  | `title:(quantum) OR body:(quantum machine)` |
 
-**Cross-field clauses** are unique to `query_string` — they let one expression target multiple text-searchable fields with their own sub-clauses. Field scope lives inside the query string itself, via `fieldname:value` / `fieldname:(multi word value)` qualifiers; unqualified terms run against every text-searchable field in the schema. The clause takes no `field` or `fields` key — passing either returns a `400`.
+Fuzzy (`~N`, edit distance 0-2; bare `~` picks a distance from term length) and regex (`/…/`, matched against analyzed tokens, not raw field text) are `query_string`-only — the `~` and `/…/` syntax is treated as literal text under `type: "text"`. Fuzzy matching is best-effort on stemmed fields, since a typo can shift which stem a term normalizes to; it's most reliable on fields without stemming.
+
+**Cross-field clauses** are unique to `query_string` — they let one expression target multiple text-searchable fields with their own sub-clauses. Field scope lives inside the query string, via `fieldname:value` / `fieldname:(multi word value)` qualifiers; unqualified terms search every text-searchable field. The clause takes no `field` or `fields` key.
 
 ```python
 score_by=[{
@@ -99,7 +103,7 @@ resp = idx.documents.search(
 )
 ```
 
-Stored and queried as `{"indices": [...], "values": [...]}`. Hosted sparse models (e.g. `pinecone-sparse-english-v0`) return embeddings with `.sparse_indices` and `.sparse_values` ready to drop in. Must appear alone in `score_by`.
+Stored and queried as `{"indices": [...], "values": [...]}`. Hosted sparse models (e.g. `pinecone-sparse-english-v0`) return embeddings with `.sparse_indices` and `.sparse_values` ready to drop in. Must appear alone in `score_by`. The `sparse_vector` field this scores against must have been declared explicitly at schema-creation time — see `references/schema-design.md`.
 
 ## Multi-field BM25
 
@@ -124,7 +128,7 @@ score_by=[{
 }]
 ```
 
-Both reward documents that match in multiple fields. **`2026-01.alpha` weights every contributing field equally** — there is no per-clause weight parameter. To approximate weighting, use Option B with `^N` term boosts inside the query string (`title:({q})^3 OR body:({q})`).
+Both reward documents that match in multiple fields. **`2026-07` weights every contributing field equally** — there is no per-clause weight parameter. To approximate weighting, use Option B with `^N` term boosts inside the query string (`title:({q})^3 OR body:({q})`).
 
 ## Filtering
 
@@ -150,12 +154,12 @@ These are the supported way to compose lexical pre-filtering with `dense_vector`
 
 > **Scoring-only operators don't go in `filter`.** Phrase slop (`"…"~N`), term boost (`^N`), and phrase prefix (`"… word"*`) influence ranking, so they're available in `query_string` `score_by` but not in `filter`.
 
-### Metadata filters (on `filterable: true` fields)
+### Metadata filters (on filterable fields)
 
-Standard comparison and membership operators — work on `string`, `string_list`, `float`, and `boolean` filterable fields.
+Standard comparison and membership operators. On a managed index, **none** of `string`, `string_list`, `float`, or `boolean` metadata fields are declared in the schema — any field present on an upserted document is auto-indexed for filtering regardless of type (see `references/schema-design.md` → "Filterable metadata — never schema-declared on managed indexes").
 
 | Operator | Example                                                     | Semantics                            |
-|----------|-------------------------------------------------------------|--------------------------------------|
+|----------|---------------------------------------------------------------|--------------------------------------|
 | `$eq`    | `{"category": {"$eq": "tech"}}`                             | Equals                               |
 | `$ne`    | `{"category": {"$ne": "archive"}}`                          | Not equals                           |
 | `$gt`    | `{"year": {"$gt": 2023}}`                                   | Greater than                         |
@@ -174,8 +178,8 @@ Multiple keys at the top level of a filter object are implicitly AND-ed. Use `$a
 filter={
     "$and": [
         {"body": {"$match_all": "federal reserve"}},     # text-match operator
-        {"category": {"$eq": "finance"}},                # metadata operator
-        {"year": {"$gte": 2024}},
+        {"category": {"$eq": "finance"}},                # metadata operator (auto-indexed, not schema-declared)
+        {"year": {"$gte": 2024}},                         # metadata operator (also auto-indexed, not schema-declared)
         {"$not": {"tags": {"$in": ["opinion"]}}},
     ],
 }
@@ -204,7 +208,7 @@ Read it top-down: only docs whose `body` contains the exact phrase `"beautifully
 When to use which text-match operator inside a hybrid query:
 
 | Use `$match_phrase` when… | Use `$match_all` when…                       | Use `$match_any` when…                 |
-|---------------------------|----------------------------------------------|----------------------------------------|
+|----------------------------|------------------------------------------------|------------------------------------------|
 | Adjacency matters (named events, idioms, multi-word concepts where order is the signal). | All tokens are required but order is not (geography + topic, e.g. `"illinois cardinal"`). | At least one token is enough (broader recall — useful as a soft filter). |
 
 ## `include_fields` modes
@@ -212,13 +216,13 @@ When to use which text-match operator inside a hybrid query:
 `include_fields` controls what each match object carries back in the response.
 
 | Value                        | Behaviour                                                      |
-|------------------------------|----------------------------------------------------------------|
-| *(omitted, or `null`)*       | Defaults to `[]` — `_id` and `_score` only.                    |
+|-------------------------------|------------------------------------------------------------------|
+| *(omitted, or `null`)*       | `_id` and `_score` only, on most builds — but some backend builds `400` on omission. |
 | `[]`                         | `_id` and `_score` only (lightest payload).                    |
 | `["*"]`                      | All stored fields (including fields not declared in the schema).|
 | `["field1", "field2"]`       | Only the listed fields (projection).                            |
 
-**Always pass `include_fields` explicitly** on `documents.search`. Some SDK builds default to `[]`; some return `400` / `422` if it's missing. Being explicit avoids surprises and makes the call's intent obvious.
+**Always pass `include_fields` explicitly** on `documents.search`. Being explicit avoids surprises and makes the call's intent obvious.
 
 User metadata fields literally named `score` are returned alongside the system-owned `_score` match score — the leading underscore prevents collisions.
 
@@ -230,13 +234,14 @@ Match objects carry:
 - `_score` (float) — system match score; **higher is better**.
 - The fields requested via `include_fields`.
 
-The `score` field name is reserved for **user metadata**; the system match score is always `_score`. Older SDK / backend builds may still emit unprefixed `score`; reading via `getattr(match, "_score", getattr(match, "score", None))` covers both.
+The `score` field name is reserved for **user metadata**; the system match score is always `_score`. Read `m._score`, not `m.score`.
 
-## `documents.fetch` — direct retrieval, ID-only
+## `documents.fetch` — direct retrieval by ID or filter
 
-Fetch is **ID-only** in `2026-01.alpha`. It does **not** accept a `filter`. To retrieve documents matching a metadata expression, search first to get IDs, then fetch:
+`documents.fetch` accepts exactly one of `ids` or `filter`:
 
 ```python
+# By ID — never paginated.
 fetched = idx.documents.fetch(
     namespace=NAMESPACE,
     ids=["doc-1", "doc-2", "does-not-exist"],
@@ -248,23 +253,63 @@ for doc_id, doc in fetched.documents.items():
 
 Missing IDs are silently omitted from the response (no error). `ids` accepts 1–1000 entries per call.
 
-## `documents.delete` — by ID or `delete_all`
+A `filter`-based fetch is **paginated** — up to 10,000 documents per page:
+
+```python
+page = idx.documents.fetch(namespace=NAMESPACE, filter={"views": {"$gt": 100}}, include_fields=["*"])
+while True:
+    for doc_id, doc in page.documents.items():
+        print(doc_id, doc.title)
+    if page.pagination is None:
+        break
+    page = idx.documents.fetch(
+        namespace=NAMESPACE,
+        filter={"views": {"$gt": 100}},
+        include_fields=["*"],
+        pagination_token=page.pagination.next,
+    )
+```
+
+An ID-based fetch never sets `response.pagination` (always `None`), so existing single-page `fetch(ids=...)` call sites need no loop.
+
+## `documents.delete` — by ID, filter, or `delete_all`
 
 ```python
 # By IDs (1–1000 per call). Non-existent IDs are silently ignored.
-idx.documents.delete(
-    namespace=NAMESPACE,
-    ids=["doc-1", "doc-2"],
-)
+resp = idx.documents.delete(namespace=NAMESPACE, ids=["doc-1", "doc-2"])
+
+# By filter — deletes every document matching the metadata expression.
+resp = idx.documents.delete(namespace=NAMESPACE, filter={"views": {"$lt": 5}})
+print(resp.matched_records)   # point-in-time count when the server accepted the request
 
 # Wipe the entire namespace.
-idx.documents.delete(
-    namespace=NAMESPACE,
-    delete_all=True,
-)
+idx.documents.delete(namespace=NAMESPACE, delete_all=True)
 ```
 
-Delete does **not** accept a `filter`. To delete documents matching a metadata expression, search first to collect IDs, then pass them to `delete`. Deletes are permanent within the namespace.
+Exactly one of `ids`, `filter`, or `delete_all` must be given. `documents.delete` returns a `DeleteDocumentsResponse` (it used to return `None`). `matched_records` is populated only for a filtered delete — it's a point-in-time count when the server accepted the request, not a promise about how many documents ultimately disappear (deletes apply asynchronously). It's `None` for an ID-list or `delete_all` delete. Deletes are permanent within the namespace.
+
+## `documents.list` — enumerate document IDs
+
+New in the graduated API — no equivalent existed under `pinecone.preview`. Lazily paginated, sorted by `_id`, and returns IDs only (no other fields):
+
+```python
+# Iterate every document ID in a namespace.
+for doc in idx.documents.list(namespace=NAMESPACE):
+    print(doc.id)
+
+# Restrict to IDs starting with a prefix — handy for the chunk-ID convention
+# in references/ingestion.md ("doc-42", "doc-42#p2", "doc-42#p3", ...).
+for doc in idx.documents.list(namespace=NAMESPACE, prefix="doc-42"):
+    print(doc.id)
+
+# Page manually instead of letting the iterator follow every page.
+for page in idx.documents.list(namespace=NAMESPACE, limit=20).pages():
+    print(len(page.items), "ids, next token:", page.pagination_token)
+```
+
+`namespace` is required. `limit` (1–100) tunes page size only — the default iterator form above still walks every page; use `.pages()` (or `itertools.islice`) if you want to stop early. `prefix` is ASCII-only, ≤512 characters. There's no `filter` — for anything beyond an ID prefix, use `documents.search` or `documents.fetch(filter=...)` instead, both of which return actual field data.
+
+Useful for confirming what's in a namespace before a `delete_all`, or auditing chunk coverage for a parent document by prefix.
 
 ## Worked cross-modal example — "pick your signal" pattern
 

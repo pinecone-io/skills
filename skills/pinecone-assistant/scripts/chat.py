@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # /// script
+# requires-python = ">=3.10"
 # dependencies = [
-#   "pinecone>=8.0.0",
+#   "pinecone==9.1.0",
 #   "typer>=0.15.0",
 #   "rich>=13.0.0",
 # ]
@@ -25,7 +26,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from pinecone import Pinecone
-from pinecone_plugins.assistant.models.chat import Message
+from pinecone.models.assistant import Message
 
 app = typer.Typer()
 console = Console()
@@ -47,8 +48,7 @@ def main(
 
     try:
         # Initialize Pinecone client
-        pc = Pinecone(api_key=api_key,source_tag="claude_code_plugin:assistant")
-        asst = pc.assistant.Assistant(assistant_name=assistant)
+        pc = Pinecone(api_key=api_key,source_tag="pinecone_skills:assistant")
 
         # Create message
         user_msg = Message(role="user", content=message)
@@ -58,7 +58,7 @@ def main(
 
         # Get response
         with console.status("[bold blue]Thinking...[/bold blue]"):
-            response = asst.chat(messages=[user_msg], stream=False)
+            response = pc.assistants.chat(assistant_name=assistant, messages=[user_msg], stream=False)
 
         answer_content = response.message.content
         citations = response.citations if hasattr(response, 'citations') else []

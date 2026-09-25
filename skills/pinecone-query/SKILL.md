@@ -1,12 +1,14 @@
 ---
 name: pinecone-query
-description: Query integrated indexes using text with Pinecone MCP. IMPORTANT - This skill ONLY works with integrated indexes (indexes with built-in Pinecone embedding models like multilingual-e5-large). For standard indexes or advanced vector operations, use the CLI skill instead. Requires PINECONE_API_KEY environment variable and Pinecone MCP server to be configured.
+description: Query integrated indexes using text with Pinecone MCP. IMPORTANT - This skill ONLY works with integrated indexes (indexes with built-in Pinecone embedding models like multilingual-e5-large). For standard indexes or advanced vector operations, use the pinecone-cli skill instead. Requires PINECONE_API_KEY environment variable and Pinecone MCP server to be configured.
 argument-hint: query [q] index [indexName] namespace [ns] topK [k] reranker [rerankModel]
 ---
 
 # Pinecone Query Skill
 
 Search for records in Pinecone integrated indexes using natural language text queries via the Pinecone MCP server.
+
+<<clarify_style>>
 
 ## What is this skill for?
 
@@ -21,13 +23,13 @@ This skill provides a simple way to query **integrated indexes** (indexes with b
 
 ### When NOT to use this skill
 
-**Use the CLI skill instead if:**
+**Use the pinecone-cli skill instead if:**
 - ❌ Your index is a standard index (no integrated embedding model)
 - ❌ You need to query with custom vector values (not text)
 - ❌ You need advanced vector operations (fetch by ID, list vectors, bulk operations)
 - ❌ Your index uses third-party embedding models (OpenAI, HuggingFace, Cohere)
 
-**MCP Limitation**: The Pinecone MCP currently only supports integrated indexes. For all other use cases, use the Pinecone CLI skill.
+**MCP Limitation**: The Pinecone MCP currently only supports integrated indexes. For all other use cases, use the pinecone-cli skill.
 
 ## How it works
 
@@ -61,10 +63,9 @@ Utilize Pinecone MCP's `search-records` tool to search for records within a spec
 **`PINECONE_API_KEY` is required.** Get a free key at https://app.pinecone.io/?sessionType=signup
 
 If you get an access error, the key is likely missing. Ask the user to set it and restart their IDE or agent session:
-- Terminal: `export PINECONE_API_KEY="your-key"`
-- IDE without shell inheritance: add `PINECONE_API_KEY=your-key` to a `.env` file
+<<api_key_setup>>
 
-**IMPORTANT** At the moment, the /query command can only be used with integrated indexes, which use hosted Pinecone embedding models to embed and search for data.
+**IMPORTANT** At the moment, the pinecone-query skill can only be used with integrated indexes, which use hosted Pinecone embedding models to embed and search for data.
 If a user attempts to query an index that uses a third party API model such as OpenAI, or HuggingFace embedding models, remind them that this capability is not available yet
 with the Pinecone MCP server.
 

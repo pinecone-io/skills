@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # /// script
+# requires-python = ">=3.10"
 # dependencies = [
-#   "pinecone>=8.0.0",
+#   "pinecone==9.1.0",
 # ]
 # ///
 
@@ -47,7 +48,7 @@ records = [
 ]
 
 dense_index = pc.Index(index_name)
-dense_index.upsert_records("example-namespace", records)
+dense_index.upsert_records(namespace="example-namespace", records=records)
 
 # 3. Search records
 # The query uses different words than the records — semantic search finds meaning, not keywords.
@@ -60,7 +61,7 @@ results = dense_index.search(
 
 print("Search results:")
 for hit in results["result"]["hits"]:
-    print(f"  id: {hit['_id']} | score: {round(hit['_score'], 2)} | text: {hit['fields']['chunk_text']}")
+    print(f"  id: {hit['id']} | score: {round(hit['score'], 2)} | text: {hit['fields']['chunk_text']}")
 
 # 4. Search with reranking
 reranked_results = dense_index.search(
@@ -71,4 +72,4 @@ reranked_results = dense_index.search(
 
 print("\nReranked results:")
 for hit in reranked_results["result"]["hits"]:
-    print(f"  id: {hit['_id']} | score: {round(hit['_score'], 2)} | text: {hit['fields']['chunk_text']}")
+    print(f"  id: {hit['id']} | score: {round(hit['score'], 2)} | text: {hit['fields']['chunk_text']}")

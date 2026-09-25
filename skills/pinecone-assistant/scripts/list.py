@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # /// script
+# requires-python = ">=3.10"
 # dependencies = [
-#   "pinecone>=8.0.0",
+#   "pinecone==9.1.0",
 #   "typer>=0.15.0",
 #   "rich>=13.0.0",
 # ]
@@ -16,7 +17,7 @@ Environment Variables:
     PINECONE_API_KEY: Required Pinecone API key
 
 Output:
-    Formatted table or JSON list of assistants with name, region, status, and host
+    Formatted table or JSON list of assistants with name, status, and host
     Optionally include files for each assistant with --files flag
 """
 
@@ -49,7 +50,7 @@ def main(
 
     try:
         # Initialize Pinecone client
-        pc = Pinecone(api_key=api_key, source_tag="claude_code_plugin:assistant")
+        pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:assistant")
 
         # List assistants
         assistants = pc.assistant.list_assistants()
@@ -60,7 +61,7 @@ def main(
             else:
                 console.print("[yellow]No assistants found.[/yellow]\n")
                 console.print("Create your first assistant with:")
-                console.print("  [cyan]/pinecone:assistant-create name [assistant-name][/cyan]")
+                console.print("  <<next_create_first>>")
             return
 
         if json_output:
@@ -69,7 +70,6 @@ def main(
             for asst in assistants:
                 asst_data = {
                     "name": asst.name,
-                    "region": getattr(asst, 'region', 'unknown'),
                     "status": asst.status,
                     "host": getattr(asst, 'host', ''),
                 }
@@ -77,8 +77,10 @@ def main(
                 if files:
                     # Get files for this assistant
                     try:
-                        assistant_instance = pc.assistant.Assistant(assistant_name=asst.name)
-                        file_list = assistant_instance.list_files()
+                        # Models from list_assistants() carry a client back-reference,
+                        # so list_files() works on them directly and returns a list.
+                        # pc.assistants.list_files() returns a Paginator with no __len__.
+                        file_list = asst.list_files()
                         asst_data["files"] = [
                             {
                                 "name": f.name,
@@ -108,7 +110,6 @@ def main(
             # Assistants table
             table = Table(show_header=True, header_style="bold cyan")
             table.add_column("Name", style="green", width=30)
-            table.add_column("Region", style="blue", width=10)
             table.add_column("Status", style="yellow", width=15)
             if files:
                 table.add_column("Files", style="magenta", width=10)
@@ -116,14 +117,15 @@ def main(
 
             for asst in assistants:
                 name = asst.name
-                region = getattr(asst, 'region', 'unknown')
                 status = asst.status
                 host = getattr(asst, 'host', '')
 
-                # Color code status
-                if status == 'ready':
+                # Color code status. The API returns capitalized values
+                # ("Ready", "Initializing"), so compare case-insensitively.
+                status_key = (status or '').lower()
+                if status_key == 'ready':
                     status_display = f"[green]{status}[/green]"
-                elif status == 'indexing':
+                elif status_key in ('indexing', 'initializing'):
                     status_display = f"[yellow]{status}[/yellow]"
                 else:
                     status_display = status
@@ -131,15 +133,17 @@ def main(
                 if files:
                     # Get file count for this assistant
                     try:
-                        assistant_instance = pc.assistant.Assistant(assistant_name=asst.name)
-                        file_list = assistant_instance.list_files()
+                        # Models from list_assistants() carry a client back-reference,
+                        # so list_files() works on them directly and returns a list.
+                        # pc.assistants.list_files() returns a Paginator with no __len__.
+                        file_list = asst.list_files()
                         file_count = str(len(file_list))
                     except Exception:
                         file_count = "?"
 
-                    table.add_row(name, region, status_display, file_count, host)
+                    table.add_row(name, status_display, file_count, host)
                 else:
-                    table.add_row(name, region, status_display, host)
+                    table.add_row(name, status_display, host)
 
             console.print(table)
             console.print()
@@ -149,8 +153,10 @@ def main(
                 console.print("[bold]File Details:[/bold]\n")
                 for asst in assistants:
                     try:
-                        assistant_instance = pc.assistant.Assistant(assistant_name=asst.name)
-                        file_list = assistant_instance.list_files()
+                        # Models from list_assistants() carry a client back-reference,
+                        # so list_files() works on them directly and returns a list.
+                        # pc.assistants.list_files() returns a Paginator with no __len__.
+                        file_list = asst.list_files()
 
                         if file_list:
                             # Create a table for this assistant's files
@@ -165,11 +171,16 @@ def main(
                                 file_id = file_obj.id
                                 file_status = file_obj.status
 
-                                # Color code file status
-                                if file_status == 'available':
+                                # Color code file status. The API returns
+                                # capitalized values ("Available", "Processing",
+                                # "ProcessingFailed"), so normalize before comparing.
+                                fs_key = (file_status or '').lower()
+                                if fs_key == 'available':
                                     file_status_display = f"[green]{file_status}[/green]"
-                                elif file_status == 'processing':
+                                elif fs_key == 'processing':
                                     file_status_display = f"[yellow]{file_status}[/yellow]"
+                                elif 'failed' in fs_key:
+                                    file_status_display = f"[red]{file_status}[/red]"
                                 else:
                                     file_status_display = file_status
 
@@ -184,10 +195,7 @@ def main(
 
             # Next steps panel
             next_steps = """[bold]Next steps:[/bold]
-• List with files: [cyan]/pinecone:assistant-list --files[/cyan]
-• Chat: [cyan]/pinecone:assistant-chat assistant [name] message [your question][/cyan]
-• Upload: [cyan]/pinecone:assistant-upload assistant [name] source [path][/cyan]
-• Context: [cyan]/pinecone:assistant-context assistant [name] query [search][/cyan]"""
+<<next_commands>>"""
 
             console.print(Panel(next_steps, title="Available Commands", border_style="blue"))
 

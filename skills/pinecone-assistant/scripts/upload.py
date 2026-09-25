@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # /// script
+# requires-python = ">=3.10"
 # dependencies = [
-#   "pinecone>=8.0.0",
+#   "pinecone==9.1.0",
 #   "typer>=0.15.0",
 #   "rich>=13.0.0",
 # ]
@@ -126,8 +127,7 @@ def main(
 
     try:
         # Initialize Pinecone client
-        pc = Pinecone(api_key=api_key, source_tag="claude_code_plugin:assistant")
-        asst = pc.assistant.Assistant(assistant_name=assistant)
+        pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:assistant")
 
         # Find files to upload
         console.print(f"\n[bold]Scanning for documentation files in:[/bold] {source}")
@@ -173,7 +173,8 @@ def main(
                     }
 
                     # Upload file
-                    asst.upload_file(
+                    pc.assistants.upload_file(
+                        assistant_name=assistant,
                         file_path=str(file_path),
                         metadata=metadata,
                         timeout=None,
@@ -207,8 +208,7 @@ def main(
         # Next steps
         if uploaded > 0:
             next_steps = f"""[bold]Next steps:[/bold]
-• Chat: [cyan]/pinecone:assistant-chat assistant {assistant} message [your question][/cyan]
-• Context: [cyan]/pinecone:assistant-context assistant {assistant} query [search][/cyan]
+<<next_after_upload>>
 
 [dim]Note: Files are being processed and will be available shortly[/dim]"""
             console.print(Panel(next_steps, title="What's Next?", border_style="green"))
