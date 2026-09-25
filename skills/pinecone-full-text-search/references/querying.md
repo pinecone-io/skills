@@ -7,7 +7,7 @@ All reads on a Pinecone document index go through `idx.documents.search(...)` (r
 A single `documents.search` request ranks by **one** scoring type. `score_by` accepts a list, but every entry must share a type:
 
 - Multiple `text` clauses (one per field) — that's how multi-field BM25 works.
-- A single `query_string` clause (which can target multiple fields via `fields: [...]` or inline `field:term` syntax inside the Lucene expression).
+- A single `query_string` clause (which can target multiple fields via inline `field:term` qualifiers in the Lucene expression).
 - `dense_vector` clauses must appear alone.
 - `sparse_vector` clauses must appear alone.
 - You **cannot** blend types — no `text` + `query_string`, no `text` + `dense_vector`, no cross-type mix. The server rejects it.
@@ -29,7 +29,7 @@ resp = idx.documents.search(
 
 Tokenizes `query` with the field's analyzer, scores each matching document with a BM25 ranker over the inverted index, returns the top `top_k`. Multiple terms use **OR semantics** — documents matching any token participate, those matching more / rarer tokens score higher. Phrase constraints (adjacent words in order) are **not** supported here — use `query_string` with quotes, or a `$match_phrase` filter, for phrase semantics.
 
-`field` is a **single string** (singular) naming an FTS-enabled `string` field — `text` clauses are scoped to one field at a time. For multi-field BM25, pass several `text` clauses (one per field) or use a `query_string` clause with a `fields` array (see Multi-field BM25 below).
+`field` is a **single string** (singular) naming an FTS-enabled `string` field — `text` clauses are scoped to one field at a time. For multi-field BM25, pass several `text` clauses (one per field) or use a `query_string` clause with inline field qualifiers (see Multi-field BM25 below).
 
 ### 2. `query_string` — Lucene syntax (boolean / phrase / boost / slop / prefix / cross-field)
 
@@ -64,12 +64,11 @@ Supported operators (full table in the public docs, summarized here):
 
 Fuzzy (`~N`, edit distance 0-2; bare `~` picks a distance from term length) and regex (`/…/`, matched against analyzed tokens, not raw field text) are `query_string`-only — the `~` and `/…/` syntax is treated as literal text under `type: "text"`. Fuzzy matching is best-effort on stemmed fields, since a typo can shift which stem a term normalizes to; it's most reliable on fields without stemming.
 
-**Cross-field clauses** are unique to `query_string` — they let one expression target multiple text-searchable fields with their own sub-clauses. Optionally pass a top-level `fields` array on the clause to restrict scope; omitted, the query runs against every text-searchable field in the schema.
+**Cross-field clauses** are unique to `query_string` — they let one expression target multiple text-searchable fields with their own sub-clauses. Field scope lives inside the query string, via `fieldname:value` / `fieldname:(multi word value)` qualifiers; unqualified terms search every text-searchable field. The clause takes no `field` or `fields` key.
 
 ```python
 score_by=[{
     "type": "query_string",
-    "fields": ["title", "body"],            # optional; restricts the query
     "query": 'title:(quantum)^2 OR body:("machine learning")',
 }]
 ```
