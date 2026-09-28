@@ -78,7 +78,7 @@ class TestCrossReferencesLeftAlone:
         "pinecone-clients",
         # unrelated
         "pinecone_skills:assistant",
-        "brew install pinecone-io/tap/pinecone",
+        "brew install --cask pinecone-io/tap/pinecone",
     ])
     def test_untouched(self, text):
         assert xref(text) == text
