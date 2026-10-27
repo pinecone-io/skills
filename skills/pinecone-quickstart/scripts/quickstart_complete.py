@@ -27,6 +27,11 @@ schema = (
 )
 if not pc.indexes.exists(name=index_name):
     pc.indexes.create(name=index_name, schema=schema)
+else:
+    existing = pc.indexes.describe(name=index_name).schema
+    field = existing.fields.get("chunk_text") if existing else None
+    if not (getattr(field, "full_text_search", None) and getattr(field, "embed", None)):
+        raise ValueError(f"Index '{index_name}' already exists with a different schema. Delete it or change index_name.")
 
 while not pc.indexes.describe(name=index_name).status.ready:
     time.sleep(2)
