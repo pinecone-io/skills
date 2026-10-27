@@ -135,6 +135,17 @@ All filter operators compose under `$and`, `$or`, `$not`. Multiple keys at the t
 
 **At most one `sparse_vector` field per index** in `2026-07`.
 
+## Integrated embedding on a string field
+
+```python
+.add_string_field("chunk_text", full_text_search={"language": "en"}, embed={})
+```
+
+- `embed={}` (dense, default `llama-text-embed-v2` at 1,024 dimensions) or `sparse_embed={}` (default `pinecone-sparse-english-v0`) has Pinecone embed the field's text on upsert and the query on search. Requires SDK ≥ 10.1.0.
+- With `full_text_search` on the same field, one field serves both BM25 and search by meaning. This is the console's default index.
+- `embed` uses the index's one dense slot and `sparse_embed` its one sparse slot, so they can't coexist with a `dense_vector` / `sparse_vector` field.
+- Scored at query time with `score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "..."}]`.
+
 ## When to add a dense field at all
 
 This is the key design question when the index already has FTS fields. **Only add a dense vector field when it represents a modality or signal that FTS cannot express.** Examples of justified dense fields:
@@ -144,7 +155,9 @@ This is the key design question when the index already has FTS fields. **Only ad
 - An **external ranking-model score** pre-computed and stored as a 1-D "vector" for sort purposes.
 - A **semantic text embedding over a different corpus** than the one in the FTS field — e.g. the FTS field holds the product description, the dense field holds an embedding of the seller's support-ticket history for that product. Different data, different signal.
 
-Anti-pattern: **re-encoding text that already lives in an FTS field on the same index.** Indexing the `body` string as FTS *and* embedding that same `body` into a dense text vector on the same index is redundant modeling, not an additive signal. FTS already gives you lexical retrieval; adding a dense re-encoding only pays off when the lexical signal is demonstrably insufficient (typically: very large corpus, very semantic queries, and you've measured the gap).
+For semantic search over the same text an FTS field holds, use integrated embedding (`embed` on that field, above) rather than a separate dense field.
+
+Anti-pattern: **re-encoding text that already lives in an FTS field into a separate, self-managed `dense_vector` field on the same index.** Indexing the `body` string as FTS *and* embedding that same `body` yourself into a dense text vector on the same index is redundant modeling, not an additive signal. FTS already gives you lexical retrieval; adding a dense re-encoding only pays off when the lexical signal is demonstrably insufficient (typically: very large corpus, very semantic queries, and you've measured the gap).
 
 ## Multi-field text design heuristics
 

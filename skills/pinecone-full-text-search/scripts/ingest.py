@@ -3,7 +3,7 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #   "typer>=0.12",
-#   "pinecone==10.0.0",
+#   "pinecone==10.2.0",
 # ]
 # ///
 """Ingest a JSONL file into a Pinecone FTS index — safely.

@@ -58,7 +58,7 @@ The SDK splits `documents` into `batch_size`-sized chunks and uploads them over 
 
 ### Tuning `batch_size` and `max_concurrency`
 
-- **`batch_size=50`** (the SDK's own default) is the sweet spot — comfortably below the per-request cap and small enough that transient failures cost less to redo.
+- **`batch_size=50`** (the SDK's own default) is the sweet spot — comfortably below the per-request cap and small enough that transient failures cost less to redo. On an index with `embed` or `sparse_embed`, the cap is 96 documents per request, so never go above 96.
 - **`max_concurrency=4`** (the SDK's own default) is a safe default for large (thousands-of-docs) loads where you're not simultaneously embedding. Ramp cautiously above 4 — you'll hit Pinecone or upstream embedding-provider rate limits first.
 - If you're embedding on the fly (computing vectors inside the upsert loop), keep `max_concurrency` low so embedding latency dominates rather than index write latency.
 
@@ -236,7 +236,7 @@ print(stats.total_vector_count, stats.namespaces)   # total record count, namesp
 
 ## Integrating embedding providers
 
-If your index has a dense or sparse vector field, you need embeddings. Three common paths:
+If a `string` field declares `embed` or `sparse_embed`, Pinecone embeds the text for you: upsert plain text and skip this section. If your index has a `dense_vector` or `sparse_vector` field, you need embeddings. Three common paths:
 
 ### Pinecone hosted inference
 
@@ -298,7 +298,7 @@ This adapter also gives you a single chokepoint for retries, rate-limit backoff,
 
 ## Limits to be aware of
 
-- **Bulk import (from object storage) is out of scope for this skill, not unsupported by Pinecone.** Pinecone supports bulk import for document-shaped indexes in `2026-07` (JSON Lines format — see [Import data](https://docs.pinecone.io/guides/index-data/import-data)); this skill just doesn't implement it. Load through `documents.upsert` / `documents.batch_upsert` here, or use a dedicated import skill when one exists.
+- **Bulk import (from object storage) is out of scope for this skill, not unsupported by Pinecone.** Pinecone supports bulk import for document-shaped indexes in `2026-07` (JSON Lines format — see [Import data](https://docs.pinecone.io/guides/index-data/import-data)), except an index with `embed` or `sparse_embed`; this skill just doesn't implement it. Load through `documents.upsert` / `documents.batch_upsert` here, or use a dedicated import skill when one exists.
 - **No backup/restore.** If you need recoverability, snapshot your source data, not the index.
 - **No CMEK projects alongside any `full_text_search` field** — such indexes can't be created in CMEK-enabled projects.
 - **Indexing latency**: documents become searchable in ≲1 minute typically; multi-field schemas can take slightly longer.

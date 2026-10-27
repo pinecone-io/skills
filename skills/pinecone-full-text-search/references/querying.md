@@ -89,6 +89,19 @@ resp = idx.documents.search(
 
 `field` is a single string (singular) naming a `dense_vector` field. `values` is a `list[float]` matching the field's declared dimension. Typically produced by embedding the user's query through the same (or a compatible) model at runtime. For text embedders with a passage/query distinction (e.g. `multilingual-e5-large`), use `input_type="query"` on the query side. Must appear alone in `score_by`.
 
+### 3b. `embed` / `sparse_embed` — score a field Pinecone embeds
+
+```python
+resp = idx.documents.search(
+    namespace=NAMESPACE,
+    top_k=5,
+    score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "how do I get my money back?"}],
+    include_fields=["chunk_text"],
+)
+```
+
+For a `string` field that declares `embed` (or `sparse_embed`, with `"type": "sparse_embed"`). Pass plain-text `query`; Pinecone embeds it with the field's model. Must appear alone in `score_by`.
+
 ### 4. `sparse_vector` — score against a stored sparse vector
 
 ```python
