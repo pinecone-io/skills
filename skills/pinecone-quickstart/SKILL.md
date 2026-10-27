@@ -56,7 +56,7 @@ The script creates an index named `quickstart` and waits until it's ready. If an
 - The index has one field, `chunk_text`, declared as `{"type": "string", "full_text_search": {"language": "en"}, "embed": {}}`
 - `full_text_search` indexes the text for exact-term (BM25) search, and `embed` has Pinecone embed it for search by meaning, so one field supports both
 - The empty `embed` config uses the default model, `llama-text-embed-v2`, at 1,024 dimensions
-- This is the same default index the Pinecone console creates
+- This matches the `chunk_text` field in the default index the Pinecone console creates
 
 ### Step 2 – Upsert Sample Documents
 
@@ -123,7 +123,7 @@ For other formats (PDF, DOCX, HTML, and so on), extract the text to `.md` or `.t
 - Pinecone doesn't extract or chunk files, so the script splits each file's text into 500-character chunks before upserting. The embedding model reads only the first 2,048 tokens of a value, so chunks need to stay well under that
 - Each chunk ID starts with its file path (`handbook.md#0`, `handbook.md#1`, ...), so all of a file's chunks can be fetched, replaced, or deleted together later
 - An index with an `embed` field accepts at most 96 documents per upsert, so the script sends the chunks in batches of 96
-- Bulk import isn't supported on an index with an `embed` field. For a large dataset in Python, `documents.batch_upsert` sends batches in parallel and retries failures
+- Bulk import isn't supported on an index with an `embed` field. For a large dataset in Python, `documents.batch_upsert` sends batches in parallel, retries temporary errors, and reports any batch that still fails
 
 Then ask the user for a question about their files and run it in either mode with `scripts/search.py`, the same way as Steps 3 and 4. The sample documents stay in the index, so they can show up in results too.
 

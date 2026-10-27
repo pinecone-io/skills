@@ -11,7 +11,7 @@ Load this file when the user shows up with **unprocessed data** and asks "make t
 
 If the user already gave you a schema spec or a JSONL of clean records, skip to UC-1's standard steps in SKILL.md.
 
-If the user has a records index (from `create_index_for_model`) already and wants to add FTS to it, see the Scope section in SKILL.md — that's a different surface and you can't add FTS fields after the fact.
+If the user has a legacy integrated index (from `create_index_for_model`) already and wants to add FTS to it, see the Scope section in SKILL.md — that's a different surface and you can't add FTS fields after the fact.
 
 ## Stage 1 — Meet the data
 

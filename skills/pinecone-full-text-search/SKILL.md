@@ -17,16 +17,16 @@ A workflow skill for building a Pinecone full-text-search index with the graduat
 
 This skill covers `pc.indexes.create(..., schema=...)`, `pc.index(name)`, `idx.documents.upsert(...)` / `idx.documents.batch_upsert(...)` / `idx.documents.search(...)`. If you find yourself reaching for any of the following, **stop** — those are different Pinecone APIs and this skill's guidance and helpers won't apply:
 
-- **Classic vector / records API**: `pc.Index(name)`, `index.upsert(vectors=[...])`, `index.query(vector=..., sparse_vector=...)`, `pc.create_index(dimension=..., metric=..., spec=ServerlessSpec(...))`. This is the *deprecated sugar* path in 10.0.0 — it still runs, but it creates a schemaless index served by the vector data plane, addressing the vector by the reserved `_values` field. It cannot hold `full_text_search` fields.
-- **Records indexes**: `pc.create_index_for_model(...)` / `pc.indexes.create_for_model(...)` with `embed={...}`. Pinecone vectorizes text server-side, and the resulting `semantic_text` field is served by the **records** API (`upsert_records` / `search_records`), not the documents API. Different upsert/search shapes.
+- **Classic vector / records API**: `index.upsert(vectors=[...])`, `index.query(vector=..., sparse_vector=...)`, `pc.create_index(dimension=..., metric=..., spec=ServerlessSpec(...))`. This is the *deprecated sugar* path in 10.0.0 — it still runs, but it creates a schemaless index served by the vector data plane, addressing the vector by the reserved `_values` field. It cannot hold `full_text_search` fields.
+- **Legacy integrated indexes**: `pc.create_index_for_model(...)` / `pc.indexes.create_for_model(...)` with `embed={...}`. Pinecone vectorizes text server-side, and the resulting `semantic_text` field is served by the legacy **Records** API (`upsert_records` / `search_records`), not the documents API. Different upsert/search shapes.
 
 To have Pinecone embed text on a document-schema index, don't use `create_index_for_model`. Declare `embed` (dense) or `sparse_embed` (learned sparse) on a `string` field instead. That's integrated embedding on the documents API, and it composes with `full_text_search` on the same field. See **Integrated embedding** below.
 
-If the user already has a non-document-schema index, they can stand up a separate document-schema index alongside it — the two are independent — but you can't add FTS fields to a classic or records index after the fact, and a document-schema index only ever serves reads and writes through `index.documents.*` — never `index.upsert` / `index.query` / `index.upsert_records` (those calls are refused with "This index has a document schema, so writes must go through the documents API").
+If the user already has a non-document-schema index, they can stand up a separate document-schema index alongside it — the two are independent — but you can't add FTS fields to a classic or legacy integrated index after the fact, and a document-schema index only ever serves reads and writes through `index.documents.*` — never `index.upsert` / `index.query` / `index.upsert_records` (those calls are refused with "This index has a document schema, so writes must go through the documents API").
 
 ## Integrated embedding — let Pinecone embed a text field
 
-Declare `embed`, `sparse_embed`, or both on a `string` field, and Pinecone embeds the field's text on upsert and the query text on search. Documents carry plain text, never vectors. Pair it with `full_text_search` on the same field and one field serves both search by meaning and BM25. This is the default index the Pinecone console creates.
+Declare `embed`, `sparse_embed`, or both on a `string` field, and Pinecone embeds the field's text on upsert and the query text on search. Documents carry plain text, never vectors. Pair it with `full_text_search` on the same field and one field serves both search by meaning and BM25. This matches the `chunk_text` field in the default index the Pinecone console creates.
 
 ```python
 schema = (
@@ -45,7 +45,7 @@ idx.documents.search(
 ```
 
 - An empty `embed={}` uses `llama-text-embed-v2` at 1,024 dimensions; `sparse_embed={}` uses `pinecone-sparse-english-v0`. Pass `model`, `dimension`, `metric`, or `read_parameters` / `write_parameters` to override. The config is fixed at creation.
-- `embed` takes the index's single dense slot and `sparse_embed` its single sparse slot, so neither can coexist with a `dense_vector` / `sparse_vector` field (create returns `400`).
+- `embed` takes the index's single dense slot and `sparse_embed` its single sparse slot, so an `embed` field can't coexist with a `dense_vector` field, nor a `sparse_embed` field with a `sparse_vector` field (create returns `400`). Mixing kinds, such as `embed` with a `sparse_vector` field, is allowed.
 - **Upserts are capped at 96 documents per request** (1,000 otherwise), because each request is one embedding call. Keep `batch_size` ≤ 96.
 - Every document must include the `embed` field's text (`400` otherwise). An empty string is rejected too.
 - An `embed` / `sparse_embed` clause must be the only clause in `score_by`. To fuse it with BM25, run two searches and merge client-side (e.g. reciprocal rank fusion); to require terms, add a `$match_*` filter on the same field.

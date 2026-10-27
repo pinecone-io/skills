@@ -142,8 +142,8 @@ All filter operators compose under `$and`, `$or`, `$not`. Multiple keys at the t
 ```
 
 - `embed={}` (dense, default `llama-text-embed-v2` at 1,024 dimensions) or `sparse_embed={}` (default `pinecone-sparse-english-v0`) has Pinecone embed the field's text on upsert and the query on search. Requires SDK ≥ 10.1.0.
-- With `full_text_search` on the same field, one field serves both BM25 and search by meaning. This is the console's default index.
-- `embed` uses the index's one dense slot and `sparse_embed` its one sparse slot, so they can't coexist with a `dense_vector` / `sparse_vector` field.
+- With `full_text_search` on the same field, one field serves both BM25 and search by meaning. This matches the `chunk_text` field in the console's default index.
+- `embed` uses the index's one dense slot and `sparse_embed` its one sparse slot, so `embed` can't coexist with a `dense_vector` field, nor `sparse_embed` with a `sparse_vector` field.
 - Scored at query time with `score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "..."}]`.
 
 ## When to add a dense field at all

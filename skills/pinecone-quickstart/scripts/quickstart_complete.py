@@ -36,7 +36,7 @@ else:
 while not pc.indexes.describe(name=index_name).status.ready:
     time.sleep(2)
 
-index = pc.Index(name=index_name)
+index = pc.index(name=index_name)
 
 # 2. Upsert documents. Pinecone embeds chunk_text on write, so you send plain text.
 index.documents.upsert(

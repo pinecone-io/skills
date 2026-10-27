@@ -68,7 +68,7 @@ def main(
             raise typer.Exit(1)
 
     pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:upsert")
-    idx = pc.Index(name=index)
+    idx = pc.index(name=index)
 
     for i in range(0, len(documents), BATCH_SIZE):
         idx.documents.upsert(namespace=namespace, documents=documents[i:i + BATCH_SIZE])

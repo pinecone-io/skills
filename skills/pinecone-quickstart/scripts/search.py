@@ -34,7 +34,7 @@ def main(
         raise typer.Exit(1)
 
     pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:index_quickstart")
-    idx = pc.Index(name=index)
+    idx = pc.index(name=index)
 
     results = idx.documents.search(
         namespace=namespace,
