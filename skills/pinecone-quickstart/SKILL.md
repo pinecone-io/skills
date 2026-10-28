@@ -35,7 +35,7 @@ This path builds the same index as the [docs quickstart](https://docs.pinecone.i
 
 ### How to run each step: MCP first, scripts as fallback
 
-Prefer the Pinecone MCP tools `create-document-index`, `upsert-documents`, and `search-documents`. Use them when they're available.
+Prefer the Pinecone MCP tools `create-document-index`, `upsert-documents`, and `search-document-index`. Use them when they're available.
 
 Fall back to the bundled scripts, which do the same thing with `uv`, when:
 - the MCP isn't configured, or those three tools aren't in its tool list (an older MCP server only has the legacy `create-index-for-model`, `upsert-records`, and `search-records`, which build a different kind of index, so never use those here)
@@ -112,7 +112,7 @@ The script upserts the same 5 documents into the `__default__` namespace, then w
 
 ### Step 3 – Search by Meaning
 
-**With the MCP**, call `search-documents`:
+**With the MCP**, call `search-document-index`:
 
 ```
 name: quickstart
@@ -135,7 +135,7 @@ Display the results in a clean table: ID, score, and `chunk_text`. Document `1`,
 
 ### Step 4 – Search by Exact Terms
 
-**With the MCP**, call `search-documents` with the same arguments as Step 3, but `scoreBy: [{type: text, fields: [chunk_text], query: "E1042"}]`.
+**With the MCP**, call `search-document-index` with the same arguments as Step 3, but `scoreBy: [{type: text, fields: [chunk_text], query: "E1042"}]`.
 
 **With the scripts:**
 

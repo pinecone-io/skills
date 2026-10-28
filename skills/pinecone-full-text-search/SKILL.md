@@ -86,7 +86,7 @@ resp = idx.documents.search(
 
 **Key rules** (the server enforces these; following them locally keeps the agent loop tight):
 
-- `score_by` is a list of clauses, but **exactly one scoring type per request** (server rejects mixed types). Multi-field BM25 is the one exception: multiple `text` clauses, or one `query_string` with `fields: [...]`. To combine BM25 + dense signals, restrict the dense search with a text-match filter (`$match_all` / `$match_phrase` / `$match_any`); do NOT mix scoring types in `score_by`.
+- `score_by` is a list of clauses, but **exactly one scoring type per request** (server rejects mixed types). Multi-field BM25 is the one exception: several `text` clauses, a cross-field `query_string`, or a mix of `text` and `query_string` clauses. To combine BM25 + dense signals, restrict the dense search with a text-match filter (`$match_all` / `$match_phrase` / `$match_any`); do NOT mix scoring types in `score_by`.
 - `filter` keys are field names (must exist in schema, or be an auto-indexed metadata field from upserted documents — see **Filterable metadata isn't declared in the schema** below) OR logical operators (`$and`, `$or`, `$not`). Field values are operator dicts (`{"$gt": 5}`, NOT bare values).
 - `include_fields` is required on every call. Pass `["*"]` for all stored fields, `[]` for ids+score only, or a list of names. Omitting it on some SDK/backend builds 400s.
 
@@ -95,13 +95,13 @@ resp = idx.documents.search(
 | `type` | Required keys | When to pick this |
 |---|---|---|
 | `text` | `field` (string FTS), `query` | Open-ended keyword search; BM25 ranking on one field |
-| `query_string` | `query` (Lucene), `fields` optional | Lucene boost (`^N`), proximity (`~N`), cross-field boolean, phrase prefix |
+| `query_string` | `query` (Lucene), with field qualifiers inside it; no `field` / `fields` | Lucene boost (`^N`), proximity (`~N`), cross-field boolean, phrase prefix |
 | `dense_vector` | `field` (dense_vector), `values` (list of floats) | Semantic / mood / topic ranking |
 | `sparse_vector` | `field` (sparse_vector), `sparse_values` ({indices, values}) | Custom sparse-encoder ranking |
 | `embed` | `fields` (string field with `embed`), `query` (plain text) | Semantic ranking when Pinecone embeds the field |
 | `sparse_embed` | `fields` (string field with `sparse_embed`), `query` (plain text) | Learned-sparse ranking when Pinecone embeds the field |
 
-`embed` / `sparse_embed` take a `fields` array naming the embedded field, plus plain-text `query`; Pinecone embeds the query. `text` / `dense_vector` / `sparse_vector` use singular `field`. Only `query_string` accepts a `fields` array (and also accepts singular `field` as an alias). `sparse_vector` uses `sparse_values` (NOT `values`) — distinct from dense.
+`embed` / `sparse_embed` take a `fields` array naming the embedded field, plus plain-text `query`; Pinecone embeds the query. `text` / `dense_vector` / `sparse_vector` use singular `field`. `query_string` takes neither `field` nor `fields` (the server rejects both); target fields with qualifiers in the query, like `body:(term)`, or omit them to search every text-searchable field. `sparse_vector` uses `sparse_values` (NOT `values`) — distinct from dense.
 
 **Filter operators by field type:**
 
@@ -266,7 +266,7 @@ Map user prompt cues to API shapes. Read top-down — identify the cue, copy the
 
 **Two structural rules the agent must enforce, no exceptions:**
 
-- **One scoring type per request.** `score_by` accepts `text` / `query_string` / `embed` / `sparse_embed` / `dense_vector` / `sparse_vector`, but a request ranks by *one*. Don't mix dense + text in `score_by` — the server rejects it. Multi-field BM25 is the only "list" pattern that's allowed (multiple `text` clauses, or one cross-field `query_string`).
+- **One scoring type per request.** `score_by` accepts `text` / `query_string` / `embed` / `sparse_embed` / `dense_vector` / `sparse_vector`, but a request ranks by *one*. Don't mix dense + text in `score_by` — the server rejects it. Multi-field BM25 is the only "list" pattern that's allowed (multiple `text` clauses, a cross-field `query_string`, or a mix of `text` and `query_string` clauses).
 - **Hybrid = filter + score_by, not two `score_by` clauses.** When a prompt has both a lexical requirement and a semantic ranking signal, lexical goes in `filter` (via `$match_*` operators) and semantic goes in `score_by`. If both signals genuinely need to drive *ranking*, run two searches and merge IDs client-side.
 
 ## Filterable metadata isn't declared in the schema at all
@@ -313,7 +313,7 @@ Three phases. Each has its own reference file — consult it before writing code
 
 1. **Design the schema.** Decide which string fields are full-text-searchable (declared in the schema), whether you need a `dense_vector` field (and whether it earns its place), and whether you also need a `sparse_vector` field — those are the *only* things that ever go in the schema. Every filterable metadata field — string, string_list, float, boolean alike — is NOT declared; it's just included on upserted documents. Schemas are **fixed at index creation** in `2026-07` — plan carefully. → `references/schema-design.md`
 2. **Ingest documents.** For bulk loads from a prepared JSONL, run the bundled `scripts/ingest.py` helper (it does `batch_upsert` + error inspection + readiness polling correctly by construction — see the **Ingesting — use the packaged helper** section above). For per-doc patch updates, use `documents.update(...)`. Either way, documents are indexed asynchronously after the HTTP call returns; `batch_upsert` returning 202 ≠ searchable. → `references/ingestion.md` for the canonical pattern in detail.
-3. **Query the index.** A single search request ranks by **one** scoring type — pass exactly one of `text`, `query_string`, `dense_vector`, or `sparse_vector` in `score_by` (multi-field BM25 is supported via multiple `text` clauses or a cross-field `query_string`). Layer `filter={...}` for text-match (`$match_phrase` / `$match_all` / `$match_any`) and metadata filters (`$eq` / `$in` / `$gte` / `$exists` / `$and` / `$or` / `$not`). Control the response payload with `include_fields`. → `references/querying.md`
+3. **Query the index.** A single search request ranks by **one** scoring type — pass exactly one of `text`, `query_string`, `embed`, `sparse_embed`, `dense_vector`, or `sparse_vector` in `score_by` (multi-field BM25 is supported via multiple `text` clauses, a cross-field `query_string`, or a mix of the two). Layer `filter={...}` for text-match (`$match_phrase` / `$match_all` / `$match_any`) and metadata filters (`$eq` / `$in` / `$gte` / `$exists` / `$and` / `$or` / `$not`). Control the response payload with `include_fields`. → `references/querying.md`
 
 ## Quick template
 
@@ -398,7 +398,7 @@ for m in resp.matches:
 ## Common gotchas
 
 - **No filterable metadata field goes in the schema on managed indexes — string, string_list, float, and boolean alike.** Only `dense_vector`, `sparse_vector`, and FTS-enabled `string` fields are legal in `schema=`; every other field type is rejected with `400`. Confirmed live against the real API, not just documented. Omit it and let it auto-index from upserted documents instead. See **Filterable metadata isn't declared in the schema at all** above — this is the change most likely to break code carried over from the old `pinecone.preview` API, where such fields were declarable.
-- **One scoring type per search request.** `score_by` accepts `text`, `query_string`, `dense_vector`, or `sparse_vector` — but a request ranks by *one* type. Multi-field BM25 is fine (pass several `text` clauses, or a single cross-field `query_string`). To combine BM25 ranking with a `dense_vector` (or `sparse_vector`) signal, restrict the dense search with a text-match `filter` operator (`$match_phrase` / `$match_all` / `$match_any`) on the lexical field, *not* by mixing types in `score_by`. The "blend a dense vector and a text clause in `score_by`" pattern is rejected by the server.
+- **One scoring type per search request.** `score_by` accepts `text`, `query_string`, `embed`, `sparse_embed`, `dense_vector`, or `sparse_vector` — but a request ranks by *one* type. Multi-field BM25 is fine (pass several `text` clauses, a single cross-field `query_string`, or a mix of `text` and `query_string` clauses). To combine BM25 ranking with a `dense_vector` (or `sparse_vector`) signal, restrict the dense search with a text-match `filter` operator (`$match_phrase` / `$match_all` / `$match_any`) on the lexical field, *not* by mixing types in `score_by`. The "blend a dense vector and a text clause in `score_by`" pattern is rejected by the server.
 - **Text-match filter operators are the cross-modal hinge.** `$match_phrase` (exact phrase), `$match_all` (every token, any order), `$match_any` (at least one token) are filter-side operators on `full_text_search` fields. Each takes a single string (max 128 tokens). They reuse the field's tokenizer / stemmer, compose under `$and` / `$or` / `$not`, and are the supported way to compose lexical pre-filtering with dense or sparse ranking. **Phrase slop (`"…"~N`), term boost (`^N`), and phrase prefix (`"… word"*`) are scoring-only — they live in `query_string`, not in `filter`.**
 - **Preprod backends need `additional_headers={"x-environment": "..."}` on the `Pinecone()` client.** Missing the header lands you on prod and you'll see "index not found" / empty-result symptoms that look like code bugs but aren't.
 - **`include_fields` is required on every `documents.search(...)` call.** Pass `["*"]` for all stored fields or a list of names to project. Omitting it on some SDK/backend builds yields `400` instead of a sane default; always pass it explicitly to avoid surprises.
@@ -417,9 +417,9 @@ for m in resp.matches:
 - **Namespaces auto-create on first upsert.** Pass any namespace string to `documents.upsert` / `batch_upsert` and the namespace is created on the fly; documents from different namespaces are fully isolated. Use `"__default__"` if you don't need partitioning.
 - **Namespace management and `describe_index_stats` now work on document-schema indexes.** `idx.create_namespace(name=...)`, `idx.list_namespaces()`, `idx.describe_namespace(name=...)`, `idx.delete_namespace(name=...)`, and `idx.describe_index_stats()` are all available and confirmed working — see `references/ingestion.md` → "Namespace management" for signatures and examples.
 - **Document and request size limits**: per-document max **2 MB**; per-request max **2 MB and 1000 documents** (**96** when the schema declares `embed` or `sparse_embed`); per FTS-enabled `string` field max **100 KB and 10,000 tokens** (tokens > 256 bytes are truncated by the analyzer); per-document filterable metadata (everything *not* in an FTS field) max **40 KB**. A schema can declare up to **100 FTS string fields**. For long-prose corpora, chunk before ingest — see `references/ingestion.md`.
-- **`score_by` clause shape — singular `field` is canonical for `text`/`dense_vector`/`sparse_vector`; only `query_string` takes a `fields` array.**
+- **`score_by` clause shape — singular `field` is canonical for `text`/`dense_vector`/`sparse_vector`; `query_string` takes no field key at all.**
     - `text`: `{"type":"text", "field":"<fts_field>", "query":"<terms>"}`.
-    - `query_string`: `{"type":"query_string", "query":"<lucene>", "fields":["<a>","<b>"]}` (the optional `fields` array; `query_string` also accepts a bare `"fields":"body"` string and the legacy `"field":"body"` as an alias).
+    - `query_string`: `{"type":"query_string", "query":"<lucene>"}`. Put field qualifiers in the query (`title:(x) OR body:(y)`); passing `field` or `fields` is rejected with a `400`.
     - `dense_vector`: `{"type":"dense_vector", "field":"<dense_field>", "values":[/*floats*/]}`.
     - `sparse_vector`: `{"type":"sparse_vector", "field":"<sparse_field>", "sparse_values":{"indices":[...],"values":[...]}}` — note `sparse_values` (NOT `values`) for sparse clauses.
     - `embed` / `sparse_embed`: `{"type":"embed", "fields":["<embedded_field>"], "query":"<plain text>"}`.
