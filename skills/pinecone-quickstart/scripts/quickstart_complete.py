@@ -2,12 +2,13 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "pinecone==9.1.0",
+#   "pinecone==10.2.0",
 # ]
 # ///
 
 import os
-from pinecone import Pinecone
+import time
+from pinecone import Pinecone, SchemaBuilder
 
 api_key = os.environ.get("PINECONE_API_KEY")
 if not api_key:
@@ -15,61 +16,62 @@ if not api_key:
 
 pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:index_quickstart")
 
-# 1. Create a serverless index with an integrated embedding model
+# 1. Create a document index with one text field that supports both kinds of search:
+#    full_text_search indexes it for exact terms, and embed has Pinecone embed it for meaning.
 index_name = "quickstart"
 
-if not pc.has_index(index_name):
-    pc.create_index_for_model(
-        name=index_name,
-        cloud="aws",
-        region="us-east-1",
-        embed={
-            "model": "llama-text-embed-v2",
-            "field_map": {"text": "chunk_text"}
-        }
-    )
+schema = (
+    SchemaBuilder()
+      .add_string_field("chunk_text", full_text_search={"language": "en"}, embed={})
+      .build()
+)
+if not pc.indexes.exists(name=index_name):
+    pc.indexes.create(name=index_name, schema=schema)
+else:
+    existing = pc.indexes.describe(name=index_name).schema
+    field = existing.fields.get("chunk_text") if existing else None
+    if not (getattr(field, "full_text_search", None) and getattr(field, "embed", None)):
+        raise ValueError(f"Index '{index_name}' already exists with a different schema. Delete it or change index_name.")
 
-# 2. Upsert records
-# Three distinct themes — notice the queries below use different words than the records.
-# That's semantic search: finding meaning, not just matching keywords.
-records = [
-    # Health / feeling unwell
-    {"_id": "rec1", "chunk_text": "I've been sneezing all day and my nose won't stop running.", "category": "health"},
-    {"_id": "rec2", "chunk_text": "She stayed home with a pounding headache and a low-grade fever.", "category": "health"},
-    {"_id": "rec3", "chunk_text": "He felt completely drained after waking up with a sore throat and chills.", "category": "health"},
-    # Productivity / work
-    {"_id": "rec4", "chunk_text": "She blocked off two hours in the morning to focus without interruptions.", "category": "productivity"},
-    {"_id": "rec5", "chunk_text": "He finished all his tasks ahead of schedule by prioritizing the hardest ones first.", "category": "productivity"},
-    {"_id": "rec6", "chunk_text": "Turning off notifications helped her get into a deep flow state.", "category": "productivity"},
-    # Outdoors / nature
-    {"_id": "rec7", "chunk_text": "A red fox darted across the trail and disappeared into the underbrush.", "category": "nature"},
-    {"_id": "rec8", "chunk_text": "The hikers paused to watch a bald eagle circle lazily over the valley.", "category": "nature"},
-    {"_id": "rec9", "chunk_text": "Fireflies lit up the meadow as the sun dipped below the treeline.", "category": "nature"},
-]
+while not pc.indexes.describe(name=index_name).status.ready:
+    time.sleep(2)
 
-dense_index = pc.Index(index_name)
-dense_index.upsert_records(namespace="example-namespace", records=records)
+index = pc.index(name=index_name)
 
-# 3. Search records
-# The query uses different words than the records — semantic search finds meaning, not keywords.
-query = "feeling ill and run down"
-
-results = dense_index.search(
-    namespace="example-namespace",
-    query={"top_k": 3, "inputs": {"text": query}}
+# 2. Upsert documents. Pinecone embeds chunk_text on write, so you send plain text.
+index.documents.upsert(
+    namespace="__default__",
+    documents=[
+        {"_id": "1", "chunk_text": "Refund requests must be submitted within 30 days of purchase.", "category": "policy"},
+        {"_id": "2", "chunk_text": "Enterprise customers get support with a 4-hour response time.", "category": "policy"},
+        {"_id": "3", "chunk_text": "Error E1042: the connection timed out after 30 seconds. Retry with a longer timeout.", "category": "log"},
+        {"_id": "4", "chunk_text": "To reset your password, open Settings and choose Security.", "category": "support"},
+        {"_id": "5", "chunk_text": "Order 88231 shipped on 2026-08-20 via express courier.", "category": "order"},
+    ],
 )
 
-print("Search results:")
-for hit in results["result"]["hits"]:
-    print(f"  id: {hit['id']} | score: {round(hit['score'], 2)} | text: {hit['fields']['chunk_text']}")
+time.sleep(10)  # documents are indexed asynchronously, so wait a moment
 
-# 4. Search with reranking
-reranked_results = dense_index.search(
-    namespace="example-namespace",
-    query={"top_k": 3, "inputs": {"text": query}},
-    rerank={"model": "bge-reranker-v2-m3", "top_n": 3, "rank_fields": ["chunk_text"]}
+# 3. Search by meaning
+meaning = index.documents.search(
+    namespace="__default__",
+    top_k=3,
+    score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "how do I get my money back?"}],
+    include_fields=["chunk_text"],
 )
 
-print("\nReranked results:")
-for hit in reranked_results["result"]["hits"]:
-    print(f"  id: {hit['id']} | score: {round(hit['score'], 2)} | text: {hit['fields']['chunk_text']}")
+print("Search by meaning:")
+for m in meaning.matches:
+    print(m._id, f"{m._score:.3f}", m.chunk_text)
+
+# 4. Search by exact terms
+terms = index.documents.search(
+    namespace="__default__",
+    top_k=3,
+    score_by=[{"type": "text", "fields": ["chunk_text"], "query": "E1042"}],
+    include_fields=["chunk_text"],
+)
+
+print("\nSearch by exact terms:")
+for m in terms.matches:
+    print(m._id, f"{m._score:.3f}", m.chunk_text)

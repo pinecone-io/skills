@@ -1,0 +1,158 @@
+# Tasks for the "pinecone-quickstart" skill (Database path).
+# Both tasks are LIVE: the agent builds a real document index, loads the five
+# docs-quickstart samples, and searches it by meaning and by exact terms. verify
+# checks the answers against real Pinecone. Sequential only (--parallel 1): each
+# task uses a fixed index name.
+#
+# with-docs reads the published docs quickstart, so the skill and the docs page
+# can be compared on the same tasks.
+#
+# SDK pin: setup/verify/teardown run `pinecone==10.2.0`, matching the pin in the
+# skill's own scripts. Keep the two in step.
+
+tasks:
+
+  # 1. Write a runnable quickstart script. Catches: legacy create_index_for_model
+  #    / records API, one search method used for both queries, missing waits
+  #    before searching.
+  - id: quickstart-two-searches
+    intent: |
+      I'm new to Pinecone and want to try the Database quickstart in Python. Use
+      the Database path, not the Assistant. Don't ask me questions, make
+      reasonable choices.
+
+      Set up a Pinecone index for the five sample documents below, load them, and
+      search them two ways: by meaning, and by exact terms. Name the index
+      "quickstart-eval".
+
+      Save a Python script named quickstart.py in the current directory. When run
+      with `uv run --with pinecone==10.2.0 quickstart.py` it should create the
+      index (deleting an existing "quickstart-eval" index first), wait until it's
+      ready, upsert the documents, wait until they're searchable, then run both
+      searches and print exactly these two lines of JSON and nothing else:
+
+      {"meaning_top": "<id of the top result for the query: how do I get my money back?>"}
+      {"exact_ids": ["<ids of every result for the query: E1042>"]}
+
+      Read the API key from the PINECONE_API_KEY environment variable. Test the
+      script by running it that way. If you run it more than once, make sure the
+      index from the earlier run doesn't block the next one.
+
+      Sample documents (id: text):
+      1: Refund requests must be submitted within 30 days of purchase.
+      2: Enterprise customers get support with a 4-hour response time.
+      3: Error E1042: the connection timed out after 30 seconds. Retry with a longer timeout.
+      4: To reset your password, open Settings and choose Security.
+      5: Order 88231 shipped on 2026-08-20 via express courier.
+    category: code-gen
+    env: ["PINECONE_API_KEY"]
+    ground_truth:
+      context_refs: ["https://docs.pinecone.io/guides/get-started/quickstart.md"]
+      criteria: |
+        PASS requires a quickstart.py that, run as described, creates a document
+        index, loads the five documents, and prints a semantic top result of "1"
+        for "how do I get my money back?" and exactly ["3"] for the exact term
+        "E1042".
+
+        FAIL if the script errors, if the two searches use the same method (so one
+        of them can't be both meaning-based and exact-term based), or if the
+        printed ids are wrong.
+      outcome: "quickstart.py prints meaning_top 1 and exact_ids [\"3\"]."
+    setup: |
+      cat > /tmp/cultivar-qs-clean.py <<'PY'
+      import os
+      from pinecone import Pinecone
+      pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+      if pc.indexes.exists("quickstart-eval"):
+          pc.indexes.delete("quickstart-eval")
+          print("cleaned quickstart-eval")
+      PY
+      uv run --with pinecone==10.2.0 python3 /tmp/cultivar-qs-clean.py
+    verify: |
+      uv run --with pinecone==10.2.0 python3 /tmp/cultivar-qs-clean.py
+      uv run --with pinecone==10.2.0 quickstart.py > qs_out.txt 2>&1
+      cat qs_out.txt
+      python3 - <<'PY'
+      import json, sys
+      got = {}
+      for line in open("qs_out.txt"):
+          line = line.strip()
+          if line.startswith("{"):
+              try: got.update(json.loads(line))
+              except Exception: pass
+      print({"meaning_top": got.get("meaning_top"), "exact_ids": got.get("exact_ids")})
+      sys.exit(0 if (str(got.get("meaning_top")) == "1" and [str(x) for x in got.get("exact_ids", [])] == ["3"]) else 1)
+      PY
+    teardown: |
+      uv run --with pinecone==10.2.0 python3 /tmp/cultivar-qs-clean.py
+
+  # 2. Do the quickstart live, the way the skill walks a new user through it
+  #    (MCP tools when available, the bundled scripts otherwise). verify searches
+  #    the agent's index itself rather than trusting results.json.
+  - id: quickstart-live
+    intent: |
+      I'm new to Pinecone and want to try the Database quickstart. Use the
+      Database path, not the Assistant. Don't ask me questions, make reasonable
+      choices.
+
+      Set up a Pinecone index named "quickstart-live" for the five sample
+      documents below, load the documents into it, and search it two ways: by
+      meaning, and by exact terms. Put each document's text in a field named
+      chunk_text. Leave the index in place when you're done.
+
+      When you finish, write a file named results.json with the two answers,
+      like this:
+      {"meaning_top": "<id of the top result for the query: how do I get my money back?>", "exact_ids": ["<ids of every result for the query: E1042>"]}
+
+      Sample documents (id: text):
+      1: Refund requests must be submitted within 30 days of purchase.
+      2: Enterprise customers get support with a 4-hour response time.
+      3: Error E1042: the connection timed out after 30 seconds. Retry with a longer timeout.
+      4: To reset your password, open Settings and choose Security.
+      5: Order 88231 shipped on 2026-08-20 via express courier.
+    category: code-gen
+    env: ["PINECONE_API_KEY"]
+    ground_truth:
+      context_refs: ["https://docs.pinecone.io/guides/get-started/quickstart.md"]
+      criteria: |
+        PASS requires a Pinecone document index named "quickstart-live" that holds
+        the five documents in a chunk_text field and supports both searches, and a
+        results.json with meaning_top "1" and exact_ids ["3"].
+
+        FAIL if the index is missing or can't be searched both by meaning and by
+        exact terms, or if the answers in results.json are wrong.
+      outcome: "The live index answers both searches correctly and results.json matches."
+    setup: |
+      cat > /tmp/cultivar-qs-live-clean.py <<'PY'
+      import os
+      from pinecone import Pinecone
+      pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+      if pc.indexes.exists("quickstart-live"):
+          pc.indexes.delete("quickstart-live")
+          print("cleaned quickstart-live")
+      PY
+      uv run --with pinecone==10.2.0 python3 /tmp/cultivar-qs-live-clean.py
+    verify: |
+      uv run --with pinecone==10.2.0 python3 - <<'PY'
+      import json, os, sys, time
+      from pinecone import Pinecone
+      ok = False
+      try:
+          res = json.load(open("results.json"))
+          pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+          index = pc.index(name="quickstart-live")
+          kw = dict(namespace="__default__", top_k=3, include_fields=["chunk_text"])
+          for _ in range(6):
+              m = index.documents.search(score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "how do I get my money back?"}], **kw)
+              t = index.documents.search(score_by=[{"type": "text", "fields": ["chunk_text"], "query": "E1042"}], **kw)
+              if m.matches and t.matches: break
+              time.sleep(5)
+          live = (m.matches[0]._id if m.matches else None, [x._id for x in t.matches])
+          print({"live": live, "results_json": res})
+          ok = live == ("1", ["3"]) and str(res.get("meaning_top")) == "1" and [str(x) for x in res.get("exact_ids", [])] == ["3"]
+      except Exception as e:
+          print("verify error:", type(e).__name__, str(e)[:300])
+      sys.exit(0 if ok else 1)
+      PY
+    teardown: |
+      uv run --with pinecone==10.2.0 python3 /tmp/cultivar-qs-live-clean.py
