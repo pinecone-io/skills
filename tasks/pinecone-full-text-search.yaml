@@ -91,7 +91,7 @@ tasks:
 
   # 2. Hybrid query construction (UC-3): one scoring type, hard reqs as filter.
   #    Catches: mixed scoring types in score_by, hard-req tokens in score_by, missing
-  #    include_fields, _score vs score, year in wrong place.
+  #    include_fields, year in wrong place.
   - id: hybrid-query
     intent: |
       An existing Pinecone document index `articles` has this schema:
@@ -129,8 +129,6 @@ tasks:
             * a year condition — `{"year": {"$gt": 2024}}` or `{"year": {"$gte": 2025}}`.
           The two clauses may be at the top level of `filter` (implicit AND) or under `$and`.
         - `include_fields=["*"]` (explicit; the prompt says return all stored fields).
-
-        If the function reads result fields it should reference `_score` (not `score`).
 
         BONUS:
         - A docstring explaining: hard requirements (TensorFlow, year) go in `filter`; ranking
@@ -440,7 +438,6 @@ tasks:
         BONUS:
         - Uses `documents.batch_upsert` even for 5 rows (canonical pattern; scales).
         - Inspects `result.errors` / `result.has_errors` after upsert.
-        - Notes `_score` (not `score`) when iterating result fields.
         - Notes that `pc.indexes.create()` already blocks until the index is ready by default
           (10.0.0 behavior) rather than adding a redundant manual
           `pc.indexes.describe(name).status.ready` wait loop before the documents-side poll.

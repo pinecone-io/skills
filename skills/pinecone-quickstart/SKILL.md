@@ -117,6 +117,7 @@ The script upserts the same 5 documents into the `__default__` namespace, then w
 ```
 name: quickstart
 scoreBy: [{type: embed, fields: [chunk_text], query: "how do I get my money back?"}]
+filter: {category: {$eq: policy}}
 topK: 3
 includeFields: [chunk_text]
 ```
@@ -124,18 +125,26 @@ includeFields: [chunk_text]
 **With the scripts:**
 
 ```bash
-uv run scripts/search.py --mode meaning --query "how do I get my money back?"
+uv run scripts/search.py --mode meaning --query "how do I get my money back?" --category policy
 ```
 
-Display the results in a clean table: ID, score, and `chunk_text`. Document `1`, the refund policy, should rank first. If the search returns no matches, wait a few seconds and run it again.
+Display the results in a clean table: ID, score, and `chunk_text`. Only the two policy documents are searched, and document `1`, the refund policy, should rank first. If the search returns no matches, wait a few seconds and run it again.
 
 **Explain to the user what's happening:**
 - The search scores by `embed`: Pinecone embeds the query with the same model it used for the documents and ranks them by semantic similarity
 - The question shares no words with the refund policy, but still finds it. That's search by meaning
+- The filter limits the search to documents whose `category` metadata is `policy`
 
 ### Step 4 – Search by Exact Terms
 
-**With the MCP**, call `search-document-index` with the same arguments as Step 3, but `scoreBy: [{type: text, fields: [chunk_text], query: "E1042"}]`.
+**With the MCP**, call `search-document-index`:
+
+```
+name: quickstart
+scoreBy: [{type: text, fields: [chunk_text], query: "E1042"}]
+topK: 3
+includeFields: [chunk_text]
+```
 
 **With the scripts:**
 
@@ -148,11 +157,12 @@ Display the results the same way. Only document `3`, the one that contains `E104
 **Explain to the user what's happening:**
 - The search scores by `text`: it ranks the same field by BM25 keyword relevance, so an exact identifier like an error code surfaces the document that contains it
 - This is a separate search from Step 3. Each returns its own ranking, and the scores are on different scales, so don't compare them across searches
+- Either search accepts a filter, like the `category` filter in Step 3
 - To merge the two rankings into one list, use [reciprocal rank fusion](https://docs.pinecone.io/guides/search/reciprocal-rank-fusion) in your own code
 
 Always present these as two separate searches. Don't describe them as combined, fused, or hybrid search.
 
-**Offer to explore further:** Ask the user if they'd like to try another query. Run each the same way as Step 3 (meaning: `embed`, or `--mode meaning`) or Step 4 (exact terms: `text`, or `--mode terms`):
+**Offer to explore further:** Ask the user if they'd like to try another query. Run each the same way as Step 3 (meaning: `embed`, or `--mode meaning`) or Step 4 (exact terms: `text`, or `--mode terms`), without a filter:
 - Option A: by meaning, "I can't log in to my account", which should rank the password reset (`4`) first
 - Option B: by exact terms, "88231", which should match only the order (`5`)
 - Option C: by exact terms, "how do I get my money back?", the Step 3 question as an exact-terms search. The refund policy doesn't match, because it shares no words with the question

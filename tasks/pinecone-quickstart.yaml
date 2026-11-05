@@ -1,20 +1,8 @@
-# Tasks for the "pinecone-quickstart" skill (Database path).
-# Both tasks are LIVE: the agent builds a real document index, loads the five
-# docs-quickstart samples, and searches it by meaning and by exact terms. verify
-# checks the answers against real Pinecone. Sequential only (--parallel 1): each
-# task uses a fixed index name.
-#
-# with-docs reads the published docs quickstart, so the skill and the docs page
-# can be compared on the same tasks.
-#
-# SDK pin: setup/verify/teardown run `pinecone==10.2.0`, matching the pin in the
-# skill's own scripts. Keep the two in step.
+# Live tasks with fixed index names: run with --parallel 1.
+# Keep pinecone==10.2.0 in step with the skill's scripts.
 
 tasks:
 
-  # 1. Write a runnable quickstart script. Catches: legacy create_index_for_model
-  #    / records API, one search method used for both queries, missing waits
-  #    before searching.
   - id: quickstart-two-searches
     intent: |
       I'm new to Pinecone and want to try the Database quickstart in Python. Use
@@ -86,9 +74,6 @@ tasks:
     teardown: |
       uv run --with pinecone==10.2.0 python3 /tmp/cultivar-qs-clean.py
 
-  # 2. Do the quickstart live, the way the skill walks a new user through it
-  #    (MCP tools when available, the bundled scripts otherwise). verify searches
-  #    the agent's index itself rather than trusting results.json.
   - id: quickstart-live
     intent: |
       I'm new to Pinecone and want to try the Database quickstart. Use the
@@ -147,7 +132,7 @@ tasks:
               t = index.documents.search(score_by=[{"type": "text", "fields": ["chunk_text"], "query": "E1042"}], **kw)
               if m.matches and t.matches: break
               time.sleep(5)
-          live = (m.matches[0]._id if m.matches else None, [x._id for x in t.matches])
+          live = (m.matches[0].id if m.matches else None, [x.id for x in t.matches])
           print({"live": live, "results_json": res})
           ok = live == ("1", ["3"]) and str(res.get("meaning_top")) == "1" and [str(x) for x in res.get("exact_ids", [])] == ["3"]
       except Exception as e:

@@ -16,8 +16,6 @@ if not api_key:
 
 pc = Pinecone(api_key=api_key, source_tag="pinecone_skills:index_quickstart")
 
-# 1. Create a document index with one text field that supports both kinds of search:
-#    full_text_search indexes it for exact terms, and embed has Pinecone embed it for meaning.
 index_name = "quickstart"
 
 schema = (
@@ -38,7 +36,6 @@ while not pc.indexes.describe(name=index_name).status.ready:
 
 index = pc.index(name=index_name)
 
-# 2. Upsert documents. Pinecone embeds chunk_text on write, so you send plain text.
 index.documents.upsert(
     namespace="__default__",
     documents=[
@@ -52,19 +49,18 @@ index.documents.upsert(
 
 time.sleep(10)  # documents are indexed asynchronously, so wait a moment
 
-# 3. Search by meaning
 meaning = index.documents.search(
     namespace="__default__",
     top_k=3,
     score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "how do I get my money back?"}],
+    filter={"category": {"$eq": "policy"}},
     include_fields=["chunk_text"],
 )
 
 print("Search by meaning:")
 for m in meaning.matches:
-    print(m._id, f"{m._score:.3f}", m.chunk_text)
+    print(m.id, f"{m.score:.3f}", m.chunk_text)
 
-# 4. Search by exact terms
 terms = index.documents.search(
     namespace="__default__",
     top_k=3,
@@ -74,4 +70,4 @@ terms = index.documents.search(
 
 print("\nSearch by exact terms:")
 for m in terms.matches:
-    print(m._id, f"{m._score:.3f}", m.chunk_text)
+    print(m.id, f"{m.score:.3f}", m.chunk_text)

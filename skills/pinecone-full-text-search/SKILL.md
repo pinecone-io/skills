@@ -118,8 +118,8 @@ resp = idx.documents.search(
 
 ```python
 for m in resp.matches:
-    m._id        # document id
-    m._score     # match score (NOT `score`)
+    m.id         # document id
+    m.score      # match score
     m.to_dict()  # full doc payload (when include_fields includes the field)
 ```
 
@@ -233,7 +233,7 @@ If the user already gave you a clean JSONL + a schema spec, follow the abbreviat
 1. **(Optional) Discover the schema** by calling `pc.indexes.describe(<NAME>)` and reading `schema.fields`. Skip if you already know the field types from earlier in the conversation.
 2. **Decompose the user's prompt** into `score_by` / `filter` shapes using the agent-mode decomposition table below. (Hard requirements → `filter`. Ranking signals → `score_by`. Always include `include_fields` explicitly.)
 3. **Construct the `documents.search(...)` call** following the rules in the Querying section above — one scoring type per request, operator/field-type matching, `include_fields` always set.
-4. **Execute** the call. The response carries `resp.matches`; iterate to get `m._id`, `m._score`, and field values via `m.to_dict()`. Use the matches in whatever shape the user asked for.
+4. **Execute** the call. The response carries `resp.matches`; iterate to get `m.id`, `m.score`, and field values via `m.to_dict()`. Use the matches in whatever shape the user asked for.
 5. If results come back empty or wrong, walk the failure tree in `Common gotchas`.
 
 **Result.** Live search results matching the user's intent.
@@ -392,7 +392,7 @@ resp = idx.documents.search(
     include_fields=["*"],                    # "*" = all stored fields; [] = `_id` + `_score` only
 )
 for m in resp.matches:
-    print(m._id, m._score, m.to_dict())
+    print(m.id, m.score, m.to_dict())
 ```
 
 ## Common gotchas
@@ -402,7 +402,7 @@ for m in resp.matches:
 - **Text-match filter operators are the cross-modal hinge.** `$match_phrase` (exact phrase), `$match_all` (every token, any order), `$match_any` (at least one token) are filter-side operators on `full_text_search` fields. Each takes a single string (max 128 tokens). They reuse the field's tokenizer / stemmer, compose under `$and` / `$or` / `$not`, and are the supported way to compose lexical pre-filtering with dense or sparse ranking. **Phrase slop (`"…"~N`), term boost (`^N`), and phrase prefix (`"… word"*`) are scoring-only — they live in `query_string`, not in `filter`.**
 - **Preprod backends need `additional_headers={"x-environment": "..."}` on the `Pinecone()` client.** Missing the header lands you on prod and you'll see "index not found" / empty-result symptoms that look like code bugs but aren't.
 - **`include_fields` is required on every `documents.search(...)` call.** Pass `["*"]` for all stored fields or a list of names to project. Omitting it on some SDK/backend builds yields `400` instead of a sane default; always pass it explicitly to avoid surprises.
-- **Match score is `_score`; doc id is `_id`.** The system match score is always on the `_score` field so a user metadata field literally named `score` can coexist. Always read `m._score`, never `m.score`.
+- **Read `m.id` and `m.score`.** They always return the document ID and match score, even when a document has its own field named `score`. Read that field with `m.get("score")`. `m._id` and `m._score` are aliases that match the JSON keys.
 - **Reserved field names: leading `_` and `$`, max 64 bytes.** `_` is for system fields (`_id`, `_score`); `$` is for filter operators. Schema validation rejects names that violate either rule. Length cap is bytes, not characters — be careful with non-ASCII names.
 - **Vector-field cardinality: at most one `dense_vector` and at most one `sparse_vector` per index** in `2026-07`. An `embed` field counts as the dense one and a `sparse_embed` field as the sparse one. Multiple text fields are fine.
 - **A hybrid index must declare its `sparse_vector` field at create time — there's no adding one later.** `metric="dotproduct"` on the dense field is NOT a hybrid declaration by itself in `2026-07` (it was in the old preview API). The create call succeeds either way; if the `sparse_vector` field is missing, only the *sparse writes* are refused, later, often from a different part of the codebase. If you're porting an old preview schema, audit every `metric="dotproduct"` dense field for a missing sparse field before recreating it.

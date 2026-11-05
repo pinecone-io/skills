@@ -243,11 +243,11 @@ User metadata fields literally named `score` are returned alongside the system-o
 
 Match objects carry:
 
-- `_id` (string) — document ID.
-- `_score` (float) — system match score; **higher is better**.
+- `m.id` (string) — document ID (`_id` in the JSON).
+- `m.score` (float) — system match score (`_score` in the JSON); **higher is better**.
 - The fields requested via `include_fields`.
 
-The `score` field name is reserved for **user metadata**; the system match score is always `_score`. Read `m._score`, not `m.score`.
+`m.id` and `m.score` always return the document ID and match score, even when a document has its own field named `score`. Read that field with `m.get("score")`. `m._id` and `m._score` are aliases.
 
 ## `documents.fetch` — direct retrieval by ID or filter
 

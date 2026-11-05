@@ -9,6 +9,7 @@
 
 import os
 from enum import Enum
+from typing import Optional
 import typer
 from pinecone import Pinecone
 
@@ -27,6 +28,7 @@ def main(
     index: str = typer.Option("quickstart", "--index", help="Name of the document index to search"),
     namespace: str = typer.Option("__default__", "--namespace", help="Namespace to search"),
     top_k: int = typer.Option(3, "--top-k", help="Number of results to return"),
+    category: Optional[str] = typer.Option(None, "--category", help="Only search documents with this category"),
 ):
     api_key = os.environ.get("PINECONE_API_KEY")
     if not api_key:
@@ -40,6 +42,7 @@ def main(
         namespace=namespace,
         top_k=top_k,
         score_by=[{"type": SCORE_TYPES[mode], "fields": ["chunk_text"], "query": query}],
+        filter={"category": {"$eq": category}} if category else None,
         include_fields=["chunk_text"],
     )
 
@@ -47,7 +50,7 @@ def main(
         typer.echo("No matches")
         return
     for m in results.matches:
-        typer.echo(f"{m._id} {m._score:.3f} {m.chunk_text}")
+        typer.echo(f"{m.id} {m.score:.3f} {m.chunk_text}")
 
 if __name__ == "__main__":
     app()
