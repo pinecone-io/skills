@@ -97,7 +97,7 @@ deadline = time.time() + 300  # up to 5 minutes
 while time.time() < deadline:
     resp = idx.documents.search(
         namespace=NAMESPACE, top_k=1,
-        score_by=[{"type": "text", "field": "<any_fts_field>", "query": "<sentinel>"}],
+        score_by=[{"type": "text", "fields": ["<any_fts_field>"], "query": "<sentinel>"}],
         include_fields=[],   # required on every search; [] = ids + _score only
     )
     if resp.matches:

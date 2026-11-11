@@ -7,9 +7,11 @@
 # ]
 # ///
 
+import hashlib
 import os
 import time
 from pathlib import Path
+from urllib.parse import quote
 from typing import Optional
 import typer
 from pinecone import Pinecone
@@ -26,24 +28,56 @@ SAMPLE_DOCUMENTS = [
 
 # The per-upsert cap for an index with an embed field.
 BATCH_SIZE = 96
+SKIP_DIRS = {"node_modules", "venv", "__pycache__", "site-packages", "dist", "build"}
 
 def chunk(text: str, size: int = 500) -> list[str]:
     return [text[i:i + size] for i in range(0, len(text), size)]
 
-def documents_from_source(source: Path) -> list[dict]:
-    files = [source] if source.is_file() else sorted(
-        p for p in source.rglob("*") if p.suffix.lower() in (".md", ".txt")
+def safe_id(name: str) -> str:
+    # Document IDs must be ASCII and at most 512 characters.
+    doc_id = quote(name)
+    return doc_id if len(doc_id) <= 480 else hashlib.sha256(name.encode()).hexdigest()[:32]
+
+def source_files(source: Path) -> list[Path]:
+    if source.is_file():
+        return [source]
+    return sorted(
+        p for p in source.rglob("*")
+        if p.is_file()
+        and p.suffix.lower() in (".md", ".txt")
+        and not any(part.startswith(".") or part in SKIP_DIRS for part in p.relative_to(source).parts[:-1])
     )
+
+def documents_from_source(source: Path) -> list[dict]:
     documents = []
-    for path in files:
-        doc_id = str(path.relative_to(source)) if source.is_dir() else path.name
-        text = path.read_text(encoding="utf-8")
+    for path in source_files(source):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            typer.echo(f"Skipping {path}: not UTF-8 text", err=True)
+            continue
+        doc_id = safe_id(path.relative_to(source).as_posix() if source.is_dir() else path.name)
         documents += [
             {"_id": f"{doc_id}#{i}", "chunk_text": part}
             for i, part in enumerate(chunk(text))
             if part.strip()
         ]
     return documents
+
+def wait_until_searchable(idx, namespace: str, last: dict, deadline_s: int = 60) -> bool:
+    deadline = time.monotonic() + deadline_s
+    while True:
+        results = idx.documents.search(
+            namespace=namespace,
+            top_k=10,
+            score_by=[{"type": "text", "fields": ["chunk_text"], "query": last["chunk_text"]}],
+            include_fields=[],
+        )
+        if any(m.id == last["_id"] for m in results.matches):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(2)
 
 @app.command()
 def main(
@@ -71,12 +105,18 @@ def main(
     idx = pc.index(name=index)
 
     for i in range(0, len(documents), BATCH_SIZE):
-        idx.documents.upsert(namespace=namespace, documents=documents[i:i + BATCH_SIZE])
+        try:
+            idx.documents.upsert(namespace=namespace, documents=documents[i:i + BATCH_SIZE])
+        except Exception as e:
+            typer.echo(f"Error: upsert failed after {i} of {len(documents)} documents: {e}", err=True)
+            raise typer.Exit(1)
     typer.echo(f"Upserted {len(documents)} documents into '{index}' (namespace: '{namespace}')")
 
-    typer.echo("Waiting 10 seconds for the documents to become searchable...")
-    time.sleep(10)
-    typer.echo("Done")
+    typer.echo("Waiting for the documents to become searchable...")
+    if wait_until_searchable(idx, namespace, documents[-1]):
+        typer.echo("Done")
+    else:
+        typer.echo("The documents aren't searchable yet. Wait a minute, then search again.", err=True)
 
 if __name__ == "__main__":
     app()

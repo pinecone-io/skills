@@ -146,7 +146,7 @@ def poll_until_searchable(
         resp = idx.documents.search(
             namespace=namespace,
             top_k=1,
-            score_by=[{"type": "text", "field": sentinel_field, "query": sentinel_token}],
+            score_by=[{"type": "text", "fields": [sentinel_field], "query": sentinel_token}],
             include_fields=[],  # required on every search; [] = lightest payload
         )
         if resp.matches:

@@ -83,7 +83,8 @@ tasks:
       Set up a Pinecone index named "quickstart-live" for the five sample
       documents below, load the documents into it, and search it two ways: by
       meaning, and by exact terms. Put each document's text in a field named
-      chunk_text. Leave the index in place when you're done.
+      chunk_text, and have Pinecone embed the text for you. Leave the index in
+      place when you're done.
 
       When you finish, write a file named results.json with the two answers,
       like this:
@@ -126,8 +127,13 @@ tasks:
           res = json.load(open("results.json"))
           pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
           index = pc.index(name="quickstart-live")
-          kw = dict(namespace="__default__", top_k=3, include_fields=["chunk_text"])
           for _ in range(6):
+              stats = index.describe_index_stats().namespaces
+              if not stats:
+                  time.sleep(5)
+                  continue
+              ns = max(stats, key=lambda n: stats[n].vector_count)
+              kw = dict(namespace=ns, top_k=3, include_fields=["chunk_text"])
               m = index.documents.search(score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "how do I get my money back?"}], **kw)
               t = index.documents.search(score_by=[{"type": "text", "fields": ["chunk_text"], "query": "E1042"}], **kw)
               if m.matches and t.matches: break

@@ -69,7 +69,7 @@ For any task that asks you to query an FTS index, you write a `documents.search(
 resp = idx.documents.search(
     namespace="__default__",
     top_k=10,
-    score_by=[{"type": "text", "field": "body", "query": "machine learning"}],
+    score_by=[{"type": "text", "fields": ["body"], "query": "machine learning"}],
     filter={"year": {"$gt": 2024}, "category": {"$eq": "ai"}},  # optional
     include_fields=["*"],   # always pass explicitly
 )
@@ -94,14 +94,14 @@ resp = idx.documents.search(
 
 | `type` | Required keys | When to pick this |
 |---|---|---|
-| `text` | `field` (string FTS), `query` | Open-ended keyword search; BM25 ranking on one field |
+| `text` | `fields` (list of string FTS fields), `query` | Open-ended keyword search; BM25 ranking, summed across the listed fields |
 | `query_string` | `query` (Lucene), with field qualifiers inside it; no `field` / `fields` | Lucene boost (`^N`), proximity (`~N`), cross-field boolean, phrase prefix |
 | `dense_vector` | `field` (dense_vector), `values` (list of floats) | Semantic / mood / topic ranking |
 | `sparse_vector` | `field` (sparse_vector), `sparse_values` ({indices, values}) | Custom sparse-encoder ranking |
 | `embed` | `fields` (string field with `embed`), `query` (plain text) | Semantic ranking when Pinecone embeds the field |
 | `sparse_embed` | `fields` (string field with `sparse_embed`), `query` (plain text) | Learned-sparse ranking when Pinecone embeds the field |
 
-`embed` / `sparse_embed` take a `fields` array naming the embedded field, plus plain-text `query`; Pinecone embeds the query. `text` / `dense_vector` / `sparse_vector` use singular `field`. `query_string` takes neither `field` nor `fields` (the server rejects both); target fields with qualifiers in the query, like `body:(term)`, or omit them to search every text-searchable field. `sparse_vector` uses `sparse_values` (NOT `values`) — distinct from dense.
+`embed` / `sparse_embed` take a `fields` array naming the embedded field, plus plain-text `query`; Pinecone embeds the query. `text` takes a `fields` array too, and one clause can list several FTS fields. `dense_vector` / `sparse_vector` use singular `field`. `query_string` takes neither `field` nor `fields` (the server rejects both); target fields with qualifiers in the query, like `body:(term)`, or omit them to search every text-searchable field. `sparse_vector` uses `sparse_values` (NOT `values`) — distinct from dense.
 
 **Filter operators by field type:**
 
@@ -250,7 +250,7 @@ Map user prompt cues to API shapes. Read top-down — identify the cue, copy the
 
 | User prompt cue | API shape |
 |---|---|
-| Open-ended keywords ("articles about machine learning", search-bar query) | `score_by=[{"type": "text", "field": "<field>", "query": "<terms>"}]` — BM25 token-OR |
+| Open-ended keywords ("articles about machine learning", search-bar query) | `score_by=[{"type": "text", "fields": ["<field>"], "query": "<terms>"}]` — BM25 token-OR |
 | Exact phrase, drives ranking ("rank by 'beautifully written'") | `score_by=[{"type": "query_string", "query": '<field>:("phrase here")'}]` |
 | Exact phrase, hard requirement ("must contain 'machine learning'") | `filter={"<field>": {"$match_phrase": "machine learning"}}` |
 | Required tokens, any order ("must mention TensorFlow", "must be about Illinois") | `filter={"<field>": {"$match_all": "tokens space-separated"}}` — preferred over `query_string` `+token` because it's a true hard filter, doesn't contribute to score |
@@ -376,7 +376,7 @@ deadline = time.time() + 300
 while time.time() < deadline:
     resp = idx.documents.search(
         namespace=NAMESPACE, top_k=1,
-        score_by=[{"type": "text", "field": "body", "query": "search"}],  # TODO: sentinel query likely to hit
+        score_by=[{"type": "text", "fields": ["body"], "query": "search"}],  # TODO: sentinel query likely to hit
         include_fields=[],          # required on every search; [] = lightest payload (ids + _score only)
     )
     if resp.matches:
@@ -387,7 +387,7 @@ while time.time() < deadline:
 resp = idx.documents.search(
     namespace=NAMESPACE,
     top_k=5,
-    score_by=[{"type": "text", "field": "body", "query": "keyword queries"}],
+    score_by=[{"type": "text", "fields": ["body"], "query": "keyword queries"}],
     filter={"year": {"$gte": 2024}},        # TODO: adjust filter or drop it
     include_fields=["*"],                    # "*" = all stored fields; [] = `_id` + `_score` only
 )
@@ -417,8 +417,8 @@ for m in resp.matches:
 - **Namespaces auto-create on first upsert.** Pass any namespace string to `documents.upsert` / `batch_upsert` and the namespace is created on the fly; documents from different namespaces are fully isolated. Use `"__default__"` if you don't need partitioning.
 - **Namespace management and `describe_index_stats` now work on document-schema indexes.** `idx.create_namespace(name=...)`, `idx.list_namespaces()`, `idx.describe_namespace(name=...)`, `idx.delete_namespace(name=...)`, and `idx.describe_index_stats()` are all available and confirmed working — see `references/ingestion.md` → "Namespace management" for signatures and examples.
 - **Document and request size limits**: per-document max **2 MB**; per-request max **2 MB and 1000 documents** (**96** when the schema declares `embed` or `sparse_embed`); per FTS-enabled `string` field max **100 KB and 10,000 tokens** (tokens > 256 bytes are truncated by the analyzer); per-document filterable metadata (everything *not* in an FTS field) max **40 KB**. A schema can declare up to **100 FTS string fields**. For long-prose corpora, chunk before ingest — see `references/ingestion.md`.
-- **`score_by` clause shape — singular `field` is canonical for `text`/`dense_vector`/`sparse_vector`; `query_string` takes no field key at all.**
-    - `text`: `{"type":"text", "field":"<fts_field>", "query":"<terms>"}`.
+- **`score_by` clause shape — `text` takes a `fields` list; `dense_vector`/`sparse_vector` take singular `field`; `query_string` takes no field key at all.**
+    - `text`: `{"type":"text", "fields":["<fts_field>", ...], "query":"<terms>"}`. One clause can list several fields, and a document's score is the sum of its BM25 scores in the fields that matched. The singular `field` form is deprecated: the SDK moves it into `fields` with a `DeprecationWarning`.
     - `query_string`: `{"type":"query_string", "query":"<lucene>"}`. Put field qualifiers in the query (`title:(x) OR body:(y)`); passing `field` or `fields` is rejected with a `400`.
     - `dense_vector`: `{"type":"dense_vector", "field":"<dense_field>", "values":[/*floats*/]}`.
     - `sparse_vector`: `{"type":"sparse_vector", "field":"<sparse_field>", "sparse_values":{"indices":[...],"values":[...]}}` — note `sparse_values` (NOT `values`) for sparse clauses.

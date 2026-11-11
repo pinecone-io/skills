@@ -102,7 +102,7 @@ Then wait about 10 seconds before searching (for example, run `sleep 10`), becau
 uv run scripts/upsert.py
 ```
 
-The script upserts the same 5 documents into the `__default__` namespace, then waits 10 seconds.
+The script upserts the same 5 documents into the `__default__` namespace, then waits until they're searchable.
 
 **Explain to the user what's happening:**
 - The 5 documents cover a refund policy, enterprise support, an error log (`Error E1042`), a password reset, and an order (`88231`)
@@ -174,7 +174,7 @@ Run whichever query they choose and display the results the same way. The user c
 
 Ask the user if they want to search their own files. If not, skip to Step 6.
 
-If yes, ask for the path to a file or folder. Use the script for this step even when the MCP is available: it reads, chunks, and batches the files locally, instead of passing every chunk through a tool call. It reads `.md` and `.txt` files directly:
+If yes, ask for the path to a file or folder. Use the script for this step even when the MCP is available: it reads, chunks, and batches the files locally, instead of passing every chunk through a tool call. It reads `.md` and `.txt` files directly, and skips hidden folders, dependency folders like `node_modules`, and files that aren't UTF-8 text:
 
 ```bash
 uv run scripts/upsert.py --source ./your-docs

@@ -47,9 +47,16 @@ index.documents.upsert(
     ],
 )
 
-time.sleep(10)  # documents are indexed asynchronously, so wait a moment
+# Documents are indexed asynchronously, so retry until results come back.
+def search_until_found(deadline_s=60, **kwargs):
+    deadline = time.monotonic() + deadline_s
+    while True:
+        results = index.documents.search(**kwargs)
+        if results.matches or time.monotonic() >= deadline:
+            return results
+        time.sleep(2)
 
-meaning = index.documents.search(
+meaning = search_until_found(
     namespace="__default__",
     top_k=3,
     score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "how do I get my money back?"}],
@@ -61,7 +68,7 @@ print("Search by meaning:")
 for m in meaning.matches:
     print(m.id, f"{m.score:.3f}", m.chunk_text)
 
-terms = index.documents.search(
+terms = search_until_found(
     namespace="__default__",
     top_k=3,
     score_by=[{"type": "text", "fields": ["chunk_text"], "query": "E1042"}],

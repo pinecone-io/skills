@@ -6,7 +6,7 @@ All reads on a Pinecone document index go through `idx.documents.search(...)` (r
 
 A single `documents.search` request ranks by **one** scoring type. `score_by` accepts a list, but every entry must share a type, except that `text` and `query_string` (both BM25) can be mixed:
 
-- Multiple `text` clauses (one per field) — that's how multi-field BM25 works.
+- `text` clauses, each listing one or more fields in `fields`. One clause over several fields scores the same as one clause per field.
 - A single `query_string` clause, which targets multiple fields with inline `field:term` qualifiers inside the Lucene expression. It rejects `field` and `fields`.
 - `dense_vector` clauses must appear alone.
 - `sparse_vector` clauses must appear alone.
@@ -22,14 +22,14 @@ To compose lexical and dense / sparse signals, put the lexical signal in `filter
 resp = idx.documents.search(
     namespace=NAMESPACE,
     top_k=5,
-    score_by=[{"type": "text", "field": "body", "query": "beautifully written"}],
+    score_by=[{"type": "text", "fields": ["body"], "query": "beautifully written"}],
     include_fields=["*"],
 )
 ```
 
 Tokenizes `query` with the field's analyzer, scores each matching document with a BM25 ranker over the inverted index, returns the top `top_k`. Multiple terms use **OR semantics** — documents matching any token participate, those matching more / rarer tokens score higher. Phrase constraints (adjacent words in order) are **not** supported here — use `query_string` with quotes, or a `$match_phrase` filter, for phrase semantics.
 
-`field` is a **single string** (singular) naming an FTS-enabled `string` field — `text` clauses are scoped to one field at a time. For multi-field BM25, pass several `text` clauses (one per field) or use a cross-field `query_string` clause (see Multi-field BM25 below).
+`fields` is a list of FTS-enabled `string` fields. A document matches if the query matches in any listed field, and its score is the sum of its BM25 scores in the fields that matched. The singular `field` form is deprecated: the SDK moves it into `fields` with a `DeprecationWarning`.
 
 ### 2. `query_string` — Lucene syntax (boolean / phrase / boost / slop / prefix / cross-field)
 
@@ -122,15 +122,13 @@ Stored and queried as `{"indices": [...], "values": [...]}`. Hosted sparse model
 
 Two equivalent ways to score across multiple text fields in one request:
 
-**Option A — multiple `text` clauses (one per field):**
+**Option A — one `text` clause listing every field:**
 
 ```python
-score_by=[
-    {"type": "text", "field": "title", "query": q},
-    {"type": "text", "field": "intro", "query": q},
-    {"type": "text", "field": "body",  "query": q},
-]
+score_by=[{"type": "text", "fields": ["title", "intro", "body"], "query": q}]
 ```
+
+This scores the same as one `text` clause per field. Use separate clauses only when each field needs a different query.
 
 **Option B — one `query_string` cross-field expression:**
 
@@ -348,10 +346,7 @@ schema = (
 resp = idx.documents.search(
     namespace=NS,
     top_k=10,
-    score_by=[
-        {"type": "text", "field": "title", "query": "transformer architecture"},
-        {"type": "text", "field": "body",  "query": "transformer architecture"},
-    ],
+    score_by=[{"type": "text", "fields": ["title", "body"], "query": "transformer architecture"}],
     include_fields=["title", "body"],
 )
 ```

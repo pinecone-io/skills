@@ -177,8 +177,8 @@ tasks:
               contains eagle).
             * `~5` proximity on a phrase containing both 'eagle' and 'soaring' — e.g.
               `"eagle soaring"~5` (form may vary; the slop number must be 5).
-        - Cross-field framing: either `fields: ["title", "body"]` on the score_by clause,
-          OR the query string itself uses `title:(...) OR body:(...)` syntax.
+        - Cross-field framing through qualifiers in the query string, e.g.
+          `title:(...) OR body:(...)`.
         - `top_k=5`.
         - `include_fields=["title", "body"]` (explicit; NOT `["*"]` — the prompt asked
           for those two fields specifically).
@@ -196,6 +196,8 @@ tasks:
         - The `^3` is misplaced — e.g. `^3eagle` (suffix-only) or `eagle^^3`.
         - `include_fields=["*"]` is used (the prompt asked for two specific fields).
         - The proximity number is wrong (must be 5).
+        - The `query_string` clause has a `field` or `fields` key (the SDK and the
+          server reject both; qualifiers in the query choose the fields).
 
   # 4. Bulk ingestion safety: batch_upsert + error inspection + async polling.
   #    Catches: trusting 202 as "indexed", silent batch failures, single-doc loop.

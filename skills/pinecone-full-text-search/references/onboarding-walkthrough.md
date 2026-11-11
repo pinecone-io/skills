@@ -125,7 +125,7 @@ If creation fails for a reason you didn't anticipate (e.g. name conflict, region
 
 **Action:**
 1. Pick a sentinel query you know should match a known record. E.g. for a corpus of book reviews, the first word of the first record's `body`; for a corpus with named entities, a known title or proper noun against the relevant FTS field.
-2. Run a `documents.search(...)` call against the index — `score_by=[{"type":"text", "field":"<fts_field>", "query":"<sentinel>"}]`, `include_fields=["*"]`, `top_k=3`. See the **Querying** section in SKILL.md for the canonical shape.
+2. Run a `documents.search(...)` call against the index — `score_by=[{"type":"text", "fields":["<fts_field>"], "query":"<sentinel>"}]`, `include_fields=["*"]`, `top_k=3`. See the **Querying** section in SKILL.md for the canonical shape.
 3. Show the user the results: "Search returned K matches. Top match was `<id>` with score `<x>`."
 4. If it didn't match what you expected, debug *with* the user — don't silently rerun. The async-indexing window may not have closed yet, OR your processing dropped a field, OR the user's expectation was off.
 

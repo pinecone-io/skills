@@ -93,7 +93,7 @@ Confirmed live, end to end: `{"year": {"$gte": 2020}}`, `{"featured": {"$eq": Tr
 Heuristic on stemming: turn it on for long prose fields where morphological variants of a root should match (`running` ~ `runs` ~ `ran`); leave off for short / identifier fields like titles, tags, or proper nouns where stemming would over-match (a book titled `Running` probably shouldn't also match the query `ran`). Typical pattern: stemming on for `body`, off for `title` / proper-noun fields.
 
 Enables, on `field_name`:
-- BM25 token scoring with `score_by=[{"type": "text", "field": "field_name", "query": "..."}]`.
+- BM25 token scoring with `score_by=[{"type": "text", "fields": ["field_name"], "query": "..."}]`.
 - Lucene scoring with `score_by=[{"type": "query_string", "query": "field_name:(a AND (b OR c)) NOT field_name:d"}]`.
 - Phrase / token filters: `filter={"field_name": {"$match_phrase": "..."}}`, `{"$match_all": "..."}`, `{"$match_any": "..."}`.
 
