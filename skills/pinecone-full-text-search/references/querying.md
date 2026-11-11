@@ -4,13 +4,13 @@ All reads on a Pinecone document index go through `idx.documents.search(...)` (r
 
 ## The one-scoring-type rule
 
-A single `documents.search` request ranks by **one** scoring type. `score_by` accepts a list, but every entry must share a type:
+A single `documents.search` request ranks by **one** scoring type. `score_by` accepts a list, but every entry must share a type, except that `text` and `query_string` (both BM25) can be mixed:
 
-- Multiple `text` clauses (one per field) — that's how multi-field BM25 works.
-- A single `query_string` clause (which can target multiple fields via `fields: [...]` or inline `field:term` syntax inside the Lucene expression).
+- `text` clauses, each listing one or more fields in `fields`. One clause over several fields scores the same as one clause per field.
+- A single `query_string` clause, which targets multiple fields with inline `field:term` qualifiers inside the Lucene expression. It rejects `field` and `fields`.
 - `dense_vector` clauses must appear alone.
 - `sparse_vector` clauses must appear alone.
-- You **cannot** blend types — no `text` + `query_string`, no `text` + `dense_vector`, no cross-type mix. The server rejects it.
+- `text` and `query_string` clauses can be combined. Any other mix, like `text` + `dense_vector`, is rejected by the server.
 
 To compose lexical and dense / sparse signals, put the lexical signal in `filter` via the text-match operators (`$match_phrase` / `$match_all` / `$match_any`) and let the vector clause in `score_by` do the ranking. That's the supported hybrid pattern in `2026-07`.
 
@@ -22,14 +22,14 @@ To compose lexical and dense / sparse signals, put the lexical signal in `filter
 resp = idx.documents.search(
     namespace=NAMESPACE,
     top_k=5,
-    score_by=[{"type": "text", "field": "body", "query": "beautifully written"}],
+    score_by=[{"type": "text", "fields": ["body"], "query": "beautifully written"}],
     include_fields=["*"],
 )
 ```
 
 Tokenizes `query` with the field's analyzer, scores each matching document with a BM25 ranker over the inverted index, returns the top `top_k`. Multiple terms use **OR semantics** — documents matching any token participate, those matching more / rarer tokens score higher. Phrase constraints (adjacent words in order) are **not** supported here — use `query_string` with quotes, or a `$match_phrase` filter, for phrase semantics.
 
-`field` is a **single string** (singular) naming an FTS-enabled `string` field — `text` clauses are scoped to one field at a time. For multi-field BM25, pass several `text` clauses (one per field) or use a `query_string` clause with a `fields` array (see Multi-field BM25 below).
+`fields` is a list of FTS-enabled `string` fields. A document matches if the query matches in any listed field, and its score is the sum of its BM25 scores in the fields that matched. The singular `field` form is deprecated: the SDK moves it into `fields` with a `DeprecationWarning`.
 
 ### 2. `query_string` — Lucene syntax (boolean / phrase / boost / slop / prefix / cross-field)
 
@@ -64,12 +64,11 @@ Supported operators (full table in the public docs, summarized here):
 
 Fuzzy (`~N`, edit distance 0-2; bare `~` picks a distance from term length) and regex (`/…/`, matched against analyzed tokens, not raw field text) are `query_string`-only — the `~` and `/…/` syntax is treated as literal text under `type: "text"`. Fuzzy matching is best-effort on stemmed fields, since a typo can shift which stem a term normalizes to; it's most reliable on fields without stemming.
 
-**Cross-field clauses** are unique to `query_string` — they let one expression target multiple text-searchable fields with their own sub-clauses. Optionally pass a top-level `fields` array on the clause to restrict scope; omitted, the query runs against every text-searchable field in the schema.
+**Cross-field clauses** are unique to `query_string` — they let one expression target multiple text-searchable fields with their own sub-clauses. The clause takes no `field` or `fields` (the server rejects both with a `400`): qualifiers in the expression choose the fields, and an unqualified term runs against every text-searchable field in the schema.
 
 ```python
 score_by=[{
     "type": "query_string",
-    "fields": ["title", "body"],            # optional; restricts the query
     "query": 'title:(quantum)^2 OR body:("machine learning")',
 }]
 ```
@@ -88,6 +87,19 @@ resp = idx.documents.search(
 ```
 
 `field` is a single string (singular) naming a `dense_vector` field. `values` is a `list[float]` matching the field's declared dimension. Typically produced by embedding the user's query through the same (or a compatible) model at runtime. For text embedders with a passage/query distinction (e.g. `multilingual-e5-large`), use `input_type="query"` on the query side. Must appear alone in `score_by`.
+
+### 3b. `embed` / `sparse_embed` — score a field Pinecone embeds
+
+```python
+resp = idx.documents.search(
+    namespace=NAMESPACE,
+    top_k=5,
+    score_by=[{"type": "embed", "fields": ["chunk_text"], "query": "how do I get my money back?"}],
+    include_fields=["chunk_text"],
+)
+```
+
+For a `string` field that declares `embed` (or `sparse_embed`, with `"type": "sparse_embed"`). Pass plain-text `query`; Pinecone embeds it with the field's model. Must appear alone in `score_by`.
 
 ### 4. `sparse_vector` — score against a stored sparse vector
 
@@ -110,15 +122,13 @@ Stored and queried as `{"indices": [...], "values": [...]}`. Hosted sparse model
 
 Two equivalent ways to score across multiple text fields in one request:
 
-**Option A — multiple `text` clauses (one per field):**
+**Option A — one `text` clause listing every field:**
 
 ```python
-score_by=[
-    {"type": "text", "field": "title", "query": q},
-    {"type": "text", "field": "intro", "query": q},
-    {"type": "text", "field": "body",  "query": q},
-]
+score_by=[{"type": "text", "fields": ["title", "intro", "body"], "query": q}]
 ```
+
+This scores the same as one `text` clause per field. Use separate clauses only when each field needs a different query.
 
 **Option B — one `query_string` cross-field expression:**
 
@@ -231,11 +241,11 @@ User metadata fields literally named `score` are returned alongside the system-o
 
 Match objects carry:
 
-- `_id` (string) — document ID.
-- `_score` (float) — system match score; **higher is better**.
+- `m.id` (string) — document ID (`_id` in the JSON).
+- `m.score` (float) — system match score (`_score` in the JSON); **higher is better**.
 - The fields requested via `include_fields`.
 
-The `score` field name is reserved for **user metadata**; the system match score is always `_score`. Read `m._score`, not `m.score`.
+`m.id` and `m.score` always return the document ID and match score, even when a document has its own field named `score`. Read that field with `m.get("score")`. `m._id` and `m._score` are aliases.
 
 ## `documents.fetch` — direct retrieval by ID or filter
 
@@ -336,10 +346,7 @@ schema = (
 resp = idx.documents.search(
     namespace=NS,
     top_k=10,
-    score_by=[
-        {"type": "text", "field": "title", "query": "transformer architecture"},
-        {"type": "text", "field": "body",  "query": "transformer architecture"},
-    ],
+    score_by=[{"type": "text", "fields": ["title", "body"], "query": "transformer architecture"}],
     include_fields=["title", "body"],
 )
 ```

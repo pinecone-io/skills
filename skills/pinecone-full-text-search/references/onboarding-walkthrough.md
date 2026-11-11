@@ -11,7 +11,7 @@ Load this file when the user shows up with **unprocessed data** and asks "make t
 
 If the user already gave you a schema spec or a JSONL of clean records, skip to UC-1's standard steps in SKILL.md.
 
-If the user has an integrated-embedding records index already and wants to add FTS to it, see the Scope section in SKILL.md — that's a different surface and you can't add FTS fields after the fact.
+If the user has a legacy integrated index (from `create_index_for_model`) already and wants to add FTS to it, see the Scope section in SKILL.md — that's a different surface and you can't add FTS fields after the fact.
 
 ## Stage 1 — Meet the data
 
@@ -89,7 +89,7 @@ If any field starts with `_` or `$`:
 >
 > A few notes:
 > - **`category`, `year`, and `tags` all just get included on every upserted document instead** — Pinecone indexes each one for filtering automatically (exact-match for `category`, numeric range for `year`, list-membership `$in`/`$nin` for `tags`), with nothing to declare up front for any of them.
-> - **No dense_vector field** — you said you don't have embeddings yet. We can add one later, but it requires creating a *new* index because schemas are immutable. Want to add a placeholder now and keep the door open?
+> - **No dense_vector field** — you said you don't have embeddings yet. If you want search by meaning, I can add `embed={}` to the text field instead, and Pinecone embeds it for you. Adding either later requires creating a *new* index because schemas are immutable.
 > - **`year` upserts as a Python `float`** (e.g. `2024.0`) — there's no integer wire type, schema-declared or not.
 > - **`tags`** will become `["a","b","c"]` after the comma-split we discussed — a plain Python list on the document, no schema field needed.
 >
@@ -125,7 +125,7 @@ If creation fails for a reason you didn't anticipate (e.g. name conflict, region
 
 **Action:**
 1. Pick a sentinel query you know should match a known record. E.g. for a corpus of book reviews, the first word of the first record's `body`; for a corpus with named entities, a known title or proper noun against the relevant FTS field.
-2. Run a `documents.search(...)` call against the index — `score_by=[{"type":"text", "field":"<fts_field>", "query":"<sentinel>"}]`, `include_fields=["*"]`, `top_k=3`. See the **Querying** section in SKILL.md for the canonical shape.
+2. Run a `documents.search(...)` call against the index — `score_by=[{"type":"text", "fields":["<fts_field>"], "query":"<sentinel>"}]`, `include_fields=["*"]`, `top_k=3`. See the **Querying** section in SKILL.md for the canonical shape.
 3. Show the user the results: "Search returned K matches. Top match was `<id>` with score `<x>`."
 4. If it didn't match what you expected, debug *with* the user — don't silently rerun. The async-indexing window may not have closed yet, OR your processing dropped a field, OR the user's expectation was off.
 

@@ -2,7 +2,7 @@
 # All tasks are code-gen: the agent writes Python files; we grade by inspection.
 # Three variants run per task: without-skill, with-docs (baseline-doc.md), with-skill.
 #
-# SDK pin: the LIVE tasks' `setup:` blocks install `pinecone==10.0.0`, matching the
+# SDK pin: the LIVE tasks' `setup:` blocks install `pinecone==10.2.0`, matching the
 # pin in the skill's own scripts/ingest.py. Keep the two in step.
 
 tasks:
@@ -91,7 +91,7 @@ tasks:
 
   # 2. Hybrid query construction (UC-3): one scoring type, hard reqs as filter.
   #    Catches: mixed scoring types in score_by, hard-req tokens in score_by, missing
-  #    include_fields, _score vs score, year in wrong place.
+  #    include_fields, year in wrong place.
   - id: hybrid-query
     intent: |
       An existing Pinecone document index `articles` has this schema:
@@ -129,8 +129,6 @@ tasks:
             * a year condition — `{"year": {"$gt": 2024}}` or `{"year": {"$gte": 2025}}`.
           The two clauses may be at the top level of `filter` (implicit AND) or under `$and`.
         - `include_fields=["*"]` (explicit; the prompt says return all stored fields).
-
-        If the function reads result fields it should reference `_score` (not `score`).
 
         BONUS:
         - A docstring explaining: hard requirements (TensorFlow, year) go in `filter`; ranking
@@ -179,8 +177,8 @@ tasks:
               contains eagle).
             * `~5` proximity on a phrase containing both 'eagle' and 'soaring' — e.g.
               `"eagle soaring"~5` (form may vary; the slop number must be 5).
-        - Cross-field framing: either `fields: ["title", "body"]` on the score_by clause,
-          OR the query string itself uses `title:(...) OR body:(...)` syntax.
+        - Cross-field framing through qualifiers in the query string, e.g.
+          `title:(...) OR body:(...)`.
         - `top_k=5`.
         - `include_fields=["title", "body"]` (explicit; NOT `["*"]` — the prompt asked
           for those two fields specifically).
@@ -198,6 +196,8 @@ tasks:
         - The `^3` is misplaced — e.g. `^3eagle` (suffix-only) or `eagle^^3`.
         - `include_fields=["*"]` is used (the prompt asked for two specific fields).
         - The proximity number is wrong (must be 5).
+        - The `query_string` clause has a `field` or `fields` key (the SDK and the
+          server reject both; qualifiers in the query choose the fields).
 
   # 4. Bulk ingestion safety: batch_upsert + error inspection + async polling.
   #    Catches: trusting 202 as "indexed", silent batch failures, single-doc loop.
@@ -440,7 +440,6 @@ tasks:
         BONUS:
         - Uses `documents.batch_upsert` even for 5 rows (canonical pattern; scales).
         - Inspects `result.errors` / `result.has_errors` after upsert.
-        - Notes `_score` (not `score`) when iterating result fields.
         - Notes that `pc.indexes.create()` already blocks until the index is ready by default
           (10.0.0 behavior) rather than adding a redundant manual
           `pc.indexes.describe(name).status.ready` wait loop before the documents-side poll.
@@ -564,12 +563,12 @@ tasks:
 
   # 10. LIVE gut check — does the agent actually create an index against real
   #     Pinecone? Exercises the whole stack: sandbox secret plumbing,
-  #     pinecone==10.0.0 install, control-plane connectivity, polling, teardown.
+  #     pinecone==10.2.0 install, control-plane connectivity, polling, teardown.
   #     If this PASSes, the live-execution wiring is ready for harder tasks
   #     (ingest + query). Sequential only (--parallel 1) — uses a fixed name.
   - id: create-index-live
     setup: |
-      pip install -q pinecone==10.0.0
+      pip install -q pinecone==10.2.0
       python3 -c "
       from pinecone import Pinecone
       pc = Pinecone()
@@ -651,7 +650,7 @@ tasks:
   - id: ingest-into-live-index
     setup: |
       set -e   # any failed step aborts setup loudly; framework will see non-zero exit
-      pip install -q pinecone==10.0.0
+      pip install -q pinecone==10.2.0
       # Idempotent cleanup
       python3 -c "
       from pinecone import Pinecone
@@ -770,7 +769,7 @@ tasks:
   - id: query-live-index
     setup: |
       set -e
-      pip install -q pinecone==10.0.0
+      pip install -q pinecone==10.2.0
       python3 -c "
       from pinecone import Pinecone
       pc = Pinecone()
@@ -894,7 +893,7 @@ tasks:
   - id: onboard-live-end-to-end
     setup: |
       set -e
-      pip install -q pinecone==10.0.0
+      pip install -q pinecone==10.2.0
       python3 -c "
       from pinecone import Pinecone
       pc = Pinecone()
